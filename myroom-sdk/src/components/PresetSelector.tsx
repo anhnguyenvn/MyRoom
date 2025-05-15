@@ -10,7 +10,7 @@ const presets: { name: string; manifest: IAssetManifest_MyRoom }[] = [
         type: "MyRoom",
         room: {
           backgroundColor: "#6b8cc2ff",
-          roomSkinId: "default_room",
+          roomSkinId: "room_skin_01",
           grids: [
             {
               meshName: "Floor",
@@ -26,13 +26,13 @@ const presets: { name: string; manifest: IAssetManifest_MyRoom }[] = [
     },
   },
   {
-    name: "Living Room",
+    name: "Furnished Room",
     manifest: {
       main: {
         type: "MyRoom",
         room: {
           backgroundColor: "#e0d2c0ff",
-          roomSkinId: "living_room",
+          roomSkinId: "room_skin_01",
           grids: [
             {
               meshName: "Floor",
@@ -44,8 +44,8 @@ const presets: { name: string; manifest: IAssetManifest_MyRoom }[] = [
         },
         items: [
           {
-            id: "sofa_01",
-            itemId: "sofa_basic",
+            id: "chair_01_instance",
+            itemId: "chair_01",
             transform: {
               position: { x: -2, y: 0, z: -3 },
               rotation: { x: 0, y: 0, z: 0 },
@@ -54,8 +54,8 @@ const presets: { name: string; manifest: IAssetManifest_MyRoom }[] = [
             order: 1,
           },
           {
-            id: "table_01",
-            itemId: "table_coffee",
+            id: "table_01_instance",
+            itemId: "table_01",
             transform: {
               position: { x: 0, y: 0, z: -1 },
               rotation: { x: 0, y: 0, z: 0 },
@@ -66,8 +66,8 @@ const presets: { name: string; manifest: IAssetManifest_MyRoom }[] = [
         ],
         figures: [
           {
-            id: "avatar_01",
-            avatarId: "default_avatar",
+            id: "avatar_01_instance",
+            avatarId: "avatar_01",
             transform: {
               position: { x: 2, y: 0, z: 2 },
               rotation: { x: 0, y: 180, z: 0 },

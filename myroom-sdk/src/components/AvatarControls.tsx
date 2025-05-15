@@ -6,7 +6,10 @@ const AvatarControls: React.FC = () => {
   const [isAvatar, setIsAvatar] = useState(true);
   const [placedFigures, setPlacedFigures] = useState<string[]>([]);
   const [selectedFigure, setSelectedFigure] = useState<string | null>(null);
-
+  const availableAvatars = [
+    { id: "avatar_01", name: "Avatar 1" },
+    // Add more avatars as needed
+  ];
   const handleAddFigure = () => {
     SceneManager.Room?.placeNewFigure(avatarId, isAvatar, (id) => {
       if (id) {
@@ -57,14 +60,19 @@ const AvatarControls: React.FC = () => {
         }}
       >
         <div>
-          <label htmlFor="avatarId">Avatar ID: </label>
-          <input
-            id="avatarId"
-            type="text"
+          <label htmlFor="avatarSelect">Select Avatar: </label>
+          <select
+            id="avatarSelect"
             value={avatarId}
             onChange={(e) => setAvatarId(e.target.value)}
             style={{ width: "200px" }}
-          />
+          >
+            {availableAvatars.map((avatar) => (
+              <option key={avatar.id} value={avatar.id}>
+                {avatar.name}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label>

@@ -7,6 +7,7 @@ import {
   IMyRoomFigurePlacementInfo,
   IMyRoomItemFunctionData,
 } from "../models/types";
+import { AssetLoader } from "./AssetLoader";
 
 export class MyRoomController extends BABYLON.TransformNode {
   private _context: MyRoomContext;
@@ -14,11 +15,16 @@ export class MyRoomController extends BABYLON.TransformNode {
   private _roomNode: BABYLON.Nullable<BABYLON.Mesh> = null;
   private _placedItems: Map<string, BABYLON.Mesh> = new Map();
   private _placedFigures: Map<string, AvatarController> = new Map();
-
-  constructor(scene: BABYLON.Scene, context: MyRoomContext) {
+  private _assetLoader: AssetLoader;
+  constructor(
+    scene: BABYLON.Scene,
+    assetLoader: AssetLoader,
+    context: MyRoomContext
+  ) {
     super("MyRoomController", scene);
     this._scene = scene;
     this._context = context;
+    this._assetLoader = assetLoader;
     console.log("🏠 MyRoomController created");
   }
 
@@ -37,9 +43,30 @@ export class MyRoomController extends BABYLON.TransformNode {
     console.log("📐 Grids:", grids);
     console.log("🌳 Environment:", environment);
 
-    // In a real implementation, this would load the actual room model
-    // For our simplified version, we'll create a basic room
-    this._createBasicRoom(backgroundColor);
+    // Try to load the room model from the asset server
+    const roomMesh = await this._assetLoader.loadRoomModel(roomSkinId);
+
+    // If loading from asset server fails, create a basic room
+    if (!roomMesh) {
+      console.log(
+        "⚠️ Could not load room model from asset server, creating basic room"
+      );
+      this._createBasicRoom(backgroundColor);
+    } else {
+      // Apply background color to the room
+      const roomMaterial = new BABYLON.StandardMaterial(
+        "roomMaterial",
+        this._scene
+      );
+      roomMaterial.diffuseColor = BABYLON.Color3.FromHexString(backgroundColor);
+
+      // Apply material to the room mesh if it doesn't have one
+      if (!roomMesh.material) {
+        roomMesh.material = roomMaterial;
+      }
+
+      this._roomNode = roomMesh as BABYLON.Mesh;
+    }
 
     return Promise.resolve();
   }
@@ -118,44 +145,89 @@ export class MyRoomController extends BABYLON.TransformNode {
     return Promise.resolve();
   }
 
-  private _createBasicItem(item: IMyRoomItemPlacementInfo): void {
-    // Create a simple box to represent an item
-    const itemMesh = BABYLON.MeshBuilder.CreateBox(
-      item.id,
-      { size: 0.5 },
-      this._scene
-    );
+  // Update the _createBasicItem method to use AssetLoader
+  private async _createBasicItem(
+    item: IMyRoomItemPlacementInfo
+  ): Promise<void> {
+    // Try to load the item model from the asset server
+    const itemMesh = await this._assetLoader.loadGLBModel(item.itemId);
 
-    // Apply transform
-    itemMesh.position = new BABYLON.Vector3(
-      item.transform.position.x,
-      item.transform.position.y + 0.25, // Lift it slightly above the floor
-      item.transform.position.z
-    );
+    if (itemMesh) {
+      // Add the item to the scene
+      const instances = itemMesh.instantiateModelsToScene();
 
-    itemMesh.rotation = new BABYLON.Vector3(
-      item.transform.rotation.x,
-      item.transform.rotation.y,
-      item.transform.rotation.z
-    );
+      if (instances.rootNodes.length > 0) {
+        const rootNode = instances.rootNodes[0];
 
-    itemMesh.scaling = new BABYLON.Vector3(
-      item.transform.scale.x,
-      item.transform.scale.y,
-      item.transform.scale.z
-    );
+        // Apply transform
+        rootNode.position = new BABYLON.Vector3(
+          item.transform.position.x,
+          item.transform.position.y,
+          item.transform.position.z
+        );
 
-    // Add a material with a random color
-    const itemMaterial = new BABYLON.StandardMaterial(
-      `material_${item.id}`,
-      this._scene
-    );
-    itemMaterial.diffuseColor = new BABYLON.Color3(
-      Math.random(),
-      Math.random(),
-      Math.random()
-    );
-    itemMesh.material = itemMaterial;
+        rootNode.rotation = new BABYLON.Vector3(
+          item.transform.rotation.x,
+          item.transform.rotation.y,
+          item.transform.rotation.z
+        );
+
+        rootNode.scaling = new BABYLON.Vector3(
+          item.transform.scale.x,
+          item.transform.scale.y,
+          item.transform.scale.z
+        );
+
+        // Store the item
+        this._placedItems.set(item.id, rootNode as BABYLON.Mesh);
+      }
+    } else {
+      // Fallback to creating a basic box
+      console.log(
+        "⚠️ Could not load item model from asset server, creating basic box"
+      );
+
+      // Create a simple box to represent an item
+      const itemMesh = BABYLON.MeshBuilder.CreateBox(
+        item.id,
+        { size: 0.5 },
+        this._scene
+      );
+
+      // Apply transform
+      itemMesh.position = new BABYLON.Vector3(
+        item.transform.position.x,
+        item.transform.position.y + 0.25, // Lift it slightly above the floor
+        item.transform.position.z
+      );
+
+      itemMesh.rotation = new BABYLON.Vector3(
+        item.transform.rotation.x,
+        item.transform.rotation.y,
+        item.transform.rotation.z
+      );
+
+      itemMesh.scaling = new BABYLON.Vector3(
+        item.transform.scale.x,
+        item.transform.scale.y,
+        item.transform.scale.z
+      );
+
+      // Add a material with a random color
+      const itemMaterial = new BABYLON.StandardMaterial(
+        `material_${item.id}`,
+        this._scene
+      );
+      itemMaterial.diffuseColor = new BABYLON.Color3(
+        Math.random(),
+        Math.random(),
+        Math.random()
+      );
+      itemMesh.material = itemMaterial;
+
+      // Store the item
+      this._placedItems.set(item.id, itemMesh);
+    }
   }
 
   public async placeFigures(
@@ -174,45 +246,108 @@ export class MyRoomController extends BABYLON.TransformNode {
     return Promise.resolve();
   }
 
-  private _createBasicFigure(figure: IMyRoomFigurePlacementInfo): void {
-    // Create a simple cone to represent a figure/avatar
-    const figureMesh = BABYLON.MeshBuilder.CreateCylinder(
-      figure.id || `figure_${Math.random().toString(36).substr(2, 9)}`,
-      { height: 1.7, diameterTop: 0.2, diameterBottom: 0.5 },
-      this._scene
-    );
+  private async _createBasicFigure(
+    figure: IMyRoomFigurePlacementInfo
+  ): Promise<void> {
+    // Try to load the avatar model from the asset server
+    const avatarMesh = await this._assetLoader.loadAvatarModel(figure.avatarId);
 
-    // Apply transform if available
-    if (figure.transform) {
-      figureMesh.position = new BABYLON.Vector3(
-        figure.transform.position.x,
-        figure.transform.position.y + 0.85, // Half height to place on floor
-        figure.transform.position.z
-      );
+    if (avatarMesh) {
+      // Apply transform if available
+      if (figure.transform) {
+        avatarMesh.position = new BABYLON.Vector3(
+          figure.transform.position.x,
+          figure.transform.position.y,
+          figure.transform.position.z
+        );
 
-      figureMesh.rotation = new BABYLON.Vector3(
-        figure.transform.rotation.x,
-        figure.transform.rotation.y,
-        figure.transform.rotation.z
-      );
+        avatarMesh.rotation = new BABYLON.Vector3(
+          figure.transform.rotation.x,
+          figure.transform.rotation.y,
+          figure.transform.rotation.z
+        );
 
-      figureMesh.scaling = new BABYLON.Vector3(
-        figure.transform.scale.x,
-        figure.transform.scale.y,
-        figure.transform.scale.z
+        avatarMesh.scaling = new BABYLON.Vector3(
+          figure.transform.scale.x,
+          figure.transform.scale.y,
+          figure.transform.scale.z
+        );
+      }
+
+      // Create an AvatarController for this figure
+      const avatarController = new AvatarController(
+        figure.avatarId,
+        this._scene,
+        this._context
       );
+      avatarController.setMesh(avatarMesh);
+
+      if (!figure.isAvatar) {
+        avatarController.markAsFigure();
+      }
+
+      // Store the figure
+      this._placedFigures.set(figure.id || figure.avatarId, avatarController);
     } else {
-      // Default position if no transform provided
-      figureMesh.position = new BABYLON.Vector3(0, 0.85, 0);
-    }
+      // Fallback to creating a basic figure
+      console.log(
+        "⚠️ Could not load avatar model from asset server, creating basic figure"
+      );
 
-    // Add a material with a skin-like color
-    const figureMaterial = new BABYLON.StandardMaterial(
-      `material_${figure.id}`,
-      this._scene
-    );
-    figureMaterial.diffuseColor = BABYLON.Color3.FromHexString("#FFD0B5");
-    figureMesh.material = figureMaterial;
+      // Create a simple cylinder to represent a figure/avatar
+      const figureMesh = BABYLON.MeshBuilder.CreateCylinder(
+        figure.id || `figure_${Math.random().toString(36).substr(2, 9)}`,
+        { height: 1.7, diameterTop: 0.2, diameterBottom: 0.5 },
+        this._scene
+      );
+
+      // Apply transform if available
+      if (figure.transform) {
+        figureMesh.position = new BABYLON.Vector3(
+          figure.transform.position.x,
+          figure.transform.position.y + 0.85, // Half height to place on floor
+          figure.transform.position.z
+        );
+
+        figureMesh.rotation = new BABYLON.Vector3(
+          figure.transform.rotation.x,
+          figure.transform.rotation.y,
+          figure.transform.rotation.z
+        );
+
+        figureMesh.scaling = new BABYLON.Vector3(
+          figure.transform.scale.x,
+          figure.transform.scale.y,
+          figure.transform.scale.z
+        );
+      } else {
+        // Default position if no transform provided
+        figureMesh.position = new BABYLON.Vector3(0, 0.85, 0);
+      }
+
+      // Add a material with a skin-like color
+      const figureMaterial = new BABYLON.StandardMaterial(
+        `material_${figure.id}`,
+        this._scene
+      );
+      figureMaterial.diffuseColor = BABYLON.Color3.FromHexString("#FFD0B5");
+      figureMesh.material = figureMaterial;
+
+      // Create an AvatarController for this figure
+      const avatarController = new AvatarController(
+        figure.avatarId,
+        this._scene,
+        this._context
+      );
+      avatarController.setMesh(figureMesh);
+
+      if (!figure.isAvatar) {
+        avatarController.markAsFigure();
+      }
+
+      // Store the figure
+      this._placedFigures.set(figure.id || figure.avatarId, avatarController);
+    }
   }
 
   public doItemFunction(

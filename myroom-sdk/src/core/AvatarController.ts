@@ -76,6 +76,16 @@ export class AvatarController extends BABYLON.TransformNode {
     return Promise.resolve();
   }
 
+  public setMesh(mesh: BABYLON.AbstractMesh): void {
+    // Reparent the mesh to this controller
+    mesh.parent = this;
+
+    // Scale down if it's a figure (not an avatar)
+    if (this._isFigure) {
+      this.scaling = new BABYLON.Vector3(0.5, 0.5, 0.5);
+    }
+  }
+
   public prepareLoadingAnimation(): void {
     // Set initial state for loading animation
     this.scaling = new BABYLON.Vector3(0.01, 0.01, 0.01);

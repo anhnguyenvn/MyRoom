@@ -63,9 +63,12 @@ export class SceneManager {
         });
     } else {
       console.log("SceneManager ALREADY INITIALIZED");
+      if (onSuccess) {
+        onSuccess();
+      }
     }
   }
-
+  
   static isInit(type: SceneType): boolean {
     return this._scene.has(type);
   }

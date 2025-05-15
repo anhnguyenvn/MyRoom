@@ -25,9 +25,11 @@ export class MyRoomAPI {
       const changeRenderLoopFunc = (isActive: boolean) => {
         if (isActive) {
           console.log("⚡️ Chuyển sang chế độ render nhanh (active)");
+          this._blockChangeRenderLoopByPointer = true;
           this.changeRenderLoop(RENDER_PERIOD_ACTIVE);
         } else {
           console.log("⏸ Chuyển sang render bình thường");
+          this._blockChangeRenderLoopByPointer = false;
           this.changeRenderLoop(RENDER_PERIOD_NORMAL);
         }
       };
@@ -93,7 +95,8 @@ export class MyRoomAPI {
   private async _initializeMyRoom(
     roomManifest: IAssetManifest_MyRoom | null,
     forRoomCoordi: boolean,
-    onComplete: (() => void) | null
+    onComplete: (() => void) | null,
+    serviceType?: string
   ) {
     const start = performance.now();
     console.warn("🚀 [MyRoom] Bắt đầu khởi tạo phòng...");
@@ -108,7 +111,11 @@ export class MyRoomAPI {
     }
 
     // Create a new room controller
-    this._myRoomController = new MyRoomController(this._scene!, this._context!);
+    this._myRoomController = new MyRoomController(
+      this._scene!,
+      this._assetLoader!,
+      this._context!
+    );
 
     console.log(
       "🎨 [MyRoom] Khởi tạo backgroundColor:",
@@ -123,7 +130,8 @@ export class MyRoomAPI {
       roomManifest.main.room.backgroundColor,
       roomManifest.main.room.roomSkinId,
       roomManifest.main.room.grids,
-      roomManifest.main.environment || ""
+      roomManifest.main.environment || "",
+      true // playAnimation
     );
 
     // Place items if available
@@ -135,7 +143,8 @@ export class MyRoomAPI {
       );
       await this._myRoomController.placeItems(
         roomManifest.main.items,
-        roomManifest.main.itemFunctionDatas
+        roomManifest.main.itemFunctionDatas,
+        true // playAnimation
       );
       console.log("✅ [MyRoom] Đã hoàn tất đặt item");
     }
@@ -149,7 +158,8 @@ export class MyRoomAPI {
       );
       await this._myRoomController.placeFigures(
         roomManifest.main.figures,
-        forRoomCoordi
+        forRoomCoordi,
+        true // playAnimation
       );
       console.log("✅ [MyRoom] Đã hoàn tất đặt figure");
     }

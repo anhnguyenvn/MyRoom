@@ -7,6 +7,13 @@ const ItemControls: React.FC = () => {
   const [placedItems, setPlacedItems] = useState<string[]>([]);
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
   const { showNotification } = useNotification();
+
+  const availableItems = [
+    { id: "chair_01", name: "Chair" },
+    { id: "table_01", name: "Table" },
+    // Add more items as needed
+  ];
+
   const handleAddItem = () => {
     SceneManager.Room?.placeNewItem({
       itemId,
@@ -63,14 +70,19 @@ const ItemControls: React.FC = () => {
         }}
       >
         <div>
-          <label htmlFor="itemId">Item ID: </label>
-          <input
-            id="itemId"
-            type="text"
+          <label htmlFor="itemSelect">Select Item: </label>
+          <select
+            id="itemSelect"
             value={itemId}
             onChange={(e) => setItemId(e.target.value)}
             style={{ width: "200px" }}
-          />
+          >
+            {availableItems.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
         </div>
         <button onClick={handleAddItem}>Add Item</button>
       </div>
