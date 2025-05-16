@@ -66,12 +66,12 @@ const defaultRoomManifest: IAssetManifest_MyRoom = {
     ],
     figures: [
       // Ví dụ figure (nếu có định nghĩa figure trong item.json)
-      // {
-      //   id: "npc_figure_01",
-      //   avatarId: "ID_CUA_FIGURE_TRONG_ITEM_JSON", // e.g., item có category3 là 131116 (FIGURE)
-      //   transform: { position: { x: 0, y: 0, z: 2 }, rotation: { x: 0, y: 180, z: 0 }, scale: { x: 0.8, y: 0.8, z: 0.8 }},
-      //   isAvatar: false,
-      // }
+      {
+        id: "npc_figure_01",
+        avatarId: "34aDyVneHDnaCDEY6gW9Me", // e.g., item có category3 là 131116 (FIGURE)
+        transform: { position: { x: 0, y: 0, z: 2 }, rotation: { x: 0, y: 180, z: 0 }, scale: { x: 0.8, y: 0.8, z: 0.8 }},
+        isAvatar: true,
+      }
     ],
   },
 };
