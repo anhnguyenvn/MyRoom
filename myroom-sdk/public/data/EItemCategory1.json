@@ -1,0 +1,65 @@
+{
+  "11": {
+    "ID": "11",
+    "Name": "AVATAR",
+    "Text": "Avatar Appearance",
+    "Desc": "Items that make up the avatar's appearance",
+    "ActiveIcon": ""
+  },
+  "12": {
+    "ID": "12",
+    "Name": "MYROOMSKIN",
+    "Text": "MyRoom Background",
+    "Desc": "Skin items that make up the walls and floor of MyRoom",
+    "ActiveIcon": ""
+  },
+  "13": {
+    "ID": "13",
+    "Name": "MYROOMITEM",
+    "Text": "MyRoom Item",
+    "Desc": "Items placed in MyRoom",
+    "ActiveIcon": ""
+  },
+  "14": {
+    "ID": "14",
+    "Name": "MYROOMCOORDI",
+    "Text": "MyRoom Recommended Coords",
+    "Desc": "Provides a completed MyRoom setup (Coordination/Preset)",
+    "ActiveIcon": ""
+  },
+  "15": {
+    "ID": "15",
+    "Name": "DUMMY01",
+    "Text": "-",
+    "Desc": "-",
+    "ActiveIcon": ""
+  },
+  "16": {
+    "ID": "16",
+    "Name": "SYSTEMITEM",
+    "Text": "System Item",
+    "Desc": "Used for items that require system-level implementation",
+    "ActiveIcon": ""
+  },
+  "17": {
+    "ID": "17",
+    "Name": "STATUSANIMATION",
+    "Text": "Status Message Animation",
+    "Desc": "Status message animation",
+    "ActiveIcon": ""
+  },
+  "18": {
+    "ID": "18",
+    "Name": "SYSTEMPURCHASE",
+    "Text": "System Purchase",
+    "Desc": "Used when system-level payment is required",
+    "ActiveIcon": ""
+  },
+  "19": {
+    "ID": "19",
+    "Name": "PROFILE",
+    "Text": "Profile Related",
+    "Desc": "User profile related items",
+    "ActiveIcon": ""
+  }
+}

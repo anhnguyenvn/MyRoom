@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import RoomRenderer from "./components/RoomRender";
 import RoomControls from "./components/RoomControls";
 import AvatarControls from "./components/AvatarControls";
@@ -9,14 +9,17 @@ import PresetSelector from "./components/PresetSelector";
 import ScreenshotButton from "./components/ScreenshotButton";
 import ResetRoomButton from "./components/ResetRoomButton";
 import ThemeSwitcher from "./components/ThemeSwitcher";
+import LoadingScreen from "./components/LoadingScreen"; // Import LoadingScreen
 
-// Sample room manifest based on the original project
+import itemDataManagerInstance from "./core/ItemDataManager"; // Import ItemDataManager instance
+
+// Sample room manifest - **SỬ DỤNG itemId TỪ item.json**
 const defaultRoomManifest: IAssetManifest_MyRoom = {
   main: {
     type: "MyRoom",
     room: {
-      backgroundColor: "#6b8cc2ff",
-      roomSkinId: "2NBOyh6Spw7E5QNaEr4BG4",
+      backgroundColor: "#87CEEBFF", // Sky blue
+      roomSkinId: "3lz7nEFagi9s3OpXU1ILg",
       grids: [
         {
           meshName: "Floor",
@@ -27,40 +30,48 @@ const defaultRoomManifest: IAssetManifest_MyRoom = {
         {
           meshName: "LeftWall",
           gridType: "WALL",
-          gridSize: { w: 20, h: 20 },
+          gridSize: { w: 20, h: 10 },
           gridOffset: { x: 0, y: 0 },
         },
         {
           meshName: "RightWall",
           gridType: "WALL",
-          gridSize: { w: 20, h: 20 },
+          gridSize: { w: 20, h: 10 },
           gridOffset: { x: 0, y: 0 },
         },
       ],
     },
+    environment: "1szZzGeZqzulBzOPy3SMq", // ID của "My Room Preferences 인사이드 낮" (Daylight Environment)
     items: [
       {
-        id: "chair_01",
-        itemId: "7Xy9bdWtdiQXlBG2b6AQi",
+        id: "chair_instance_01",
+        itemId: "7Xy9bdWtdiQXlBG2b6AQi", // ID của "Chair" (Chair) từ item.json
         transform: {
-          position: { x: 2, y: 0, z: 2 },
-          rotation: { x: 0, y: 0, z: 0 },
+          position: { x: 1, y: 0, z: -2 },
+          rotation: { x: 0, y: 45, z: 0 },
           scale: { x: 1, y: 1, z: 1 },
         },
         order: 1,
       },
+      // {
+      //   id: "table_instance_01",
+      //   itemId: "9QxcXSGMtUFWxnsmw7NoW", // ID của "테이블" (Table) từ item.json
+      //   transform: {
+      //     position: { x: -1.5, y: 0, z: -1 },
+      //     rotation: { x: 0, y: 0, z: 0 },
+      //     scale: { x: 1, y: 1, z: 1 },
+      //   },
+      //   order: 2,
+      // },
     ],
     figures: [
-      {
-        id: "avatar_01",
-        avatarId: "BJx99yaC9R2kLsy438O0m",
-        transform: {
-          position: { x: 0, y: 0, z: 0 },
-          rotation: { x: 0, y: 180, z: 0 },
-          scale: { x: 1, y: 1, z: 1 },
-        },
-        isAvatar: true,
-      },
+      // Ví dụ figure (nếu có định nghĩa figure trong item.json)
+      // {
+      //   id: "npc_figure_01",
+      //   avatarId: "ID_CUA_FIGURE_TRONG_ITEM_JSON", // e.g., item có category3 là 131116 (FIGURE)
+      //   transform: { position: { x: 0, y: 0, z: 2 }, rotation: { x: 0, y: 180, z: 0 }, scale: { x: 0.8, y: 0.8, z: 0.8 }},
+      //   isAvatar: false,
+      // }
     ],
   },
 };
@@ -68,40 +79,58 @@ const defaultRoomManifest: IAssetManifest_MyRoom = {
 const App: React.FC = () => {
   const [roomManifest, setRoomManifest] =
     useState<IAssetManifest_MyRoom>(defaultRoomManifest);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [backgroundColor, setBackgroundColor] = useState("#6b8cc2");
-  const [initialManifest] =
-    useState<IAssetManifest_MyRoom>(defaultRoomManifest);
-
+  const [isSceneReady, setIsSceneReady] = useState(false); // Theo dõi scene BabylonJS sẵn sàng
+  const [isDataLoading, setIsDataLoading] = useState(true); // Theo dõi ItemDataManager tải xong
+  const [backgroundColor, setBackgroundColor] = useState(
+    defaultRoomManifest.main.room.backgroundColor
+  );
   const [isDarkMode, setIsDarkMode] = useState(false);
 
-  // Add a handler for theme toggle
-  const handleThemeToggle = useCallback(() => {
-    setIsDarkMode((prev) => !prev);
+  const initialManifestRef = useRef<IAssetManifest_MyRoom>(
+    JSON.parse(JSON.stringify(defaultRoomManifest))
+  );
+
+  useEffect(() => {
+    const loadItemData = async () => {
+      setIsDataLoading(true);
+      try {
+        await itemDataManagerInstance.loadAllData();
+        console.log("Item definitions loaded successfully in App.tsx.");
+      } catch (error) {
+        console.error("Failed to load item definitions in App.tsx:", error);
+        // Hiển thị thông báo lỗi cho người dùng nếu cần
+      } finally {
+        setIsDataLoading(false);
+      }
+    };
+    loadItemData();
   }, []);
 
-  const handleRoomReset = useCallback(() => {
-    setRoomManifest(initialManifest);
-    setBackgroundColor(initialManifest.main.room.backgroundColor || "#6b8cc2");
-  }, [initialManifest]);
+  const handleThemeToggle = useCallback(
+    () => setIsDarkMode((prev) => !prev),
+    []
+  );
 
-  const handleSceneReady = useCallback(() => {
-    setIsLoaded(true);
-    console.log("Room scene is ready and loaded");
+  const handleRoomReset = useCallback(() => {
+    setRoomManifest(JSON.parse(JSON.stringify(initialManifestRef.current)));
+    setBackgroundColor(
+      initialManifestRef.current.main.room.backgroundColor || "#6b8cc2"
+    );
+  }, []);
+
+  const handleSceneReadyCallback = useCallback(() => {
+    // Đổi tên để tránh nhầm lẫn
+    setIsSceneReady(true);
+    console.log("BabylonJS Scene is ready and loaded.");
   }, []);
 
   const handleBackgroundColorChange = useCallback((color: string) => {
     setBackgroundColor(color);
-
-    // Update the room manifest with the new background color
     setRoomManifest((prevManifest) => ({
       ...prevManifest,
       main: {
         ...prevManifest.main,
-        room: {
-          ...prevManifest.main.room,
-          backgroundColor: color,
-        },
+        room: { ...prevManifest.main.room, backgroundColor: color },
       },
     }));
   }, []);
@@ -114,19 +143,14 @@ const App: React.FC = () => {
   }, []);
 
   const handleExportManifest = useCallback(() => {
-    // Create a blob with the JSON data
     const jsonData = JSON.stringify(roomManifest, null, 2);
     const blob = new Blob([jsonData], { type: "application/json" });
-
-    // Create a download link and trigger the download
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "room-manifest.json";
+    a.download = "myroom-manifest.json";
     document.body.appendChild(a);
     a.click();
-
-    // Clean up
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }, [roomManifest]);
@@ -135,7 +159,6 @@ const App: React.FC = () => {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-
       const reader = new FileReader();
       reader.onload = (event) => {
         try {
@@ -156,71 +179,73 @@ const App: React.FC = () => {
     []
   );
 
+  if (isDataLoading) {
+    // Hiển thị màn hình tải cho dữ liệu JSON
+    return (
+      <LoadingScreen
+        isVisible={true}
+        progress={itemDataManagerInstance.isDataLoaded() ? 100 : 0}
+      />
+    );
+  }
+
   return (
     <div
       style={{
         display: "flex",
-        flexDirection: "row", // Changed from 'column' to 'row'
+        flexDirection: "row",
         height: "100vh",
         backgroundColor: isDarkMode ? "#333" : "#fff",
         color: isDarkMode ? "#fff" : "#333",
         transition: "background-color 0.3s, color 0.3s",
       }}
     >
-      {/* Left Panel - UI Controls */}
       <div
         style={{
-          width: "300px", // Fixed width for the left panel
+          width: "350px",
           height: "100%",
           overflowY: "auto",
           borderRight: `1px solid ${isDarkMode ? "#444" : "#ddd"}`,
           backgroundColor: isDarkMode ? "#222" : "#f0f0f0",
           padding: "1rem",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
-        <h1>Room Renderer</h1>
+        <h1>MyRoom SDK</h1>
         <ThemeSwitcher isDarkMode={isDarkMode} onToggle={handleThemeToggle} />
-
         <RoomControls
           backgroundColor={backgroundColor}
           onBackgroundColorChange={handleBackgroundColorChange}
           onExportManifest={handleExportManifest}
           onImportManifest={handleImportManifest}
         />
-
         <PresetSelector onSelectPreset={handleSelectPreset} />
-
         <div
           style={{
             display: "flex",
-            justifyContent: "center",
+            justifyContent: "space-around",
             margin: "0.5rem 0",
           }}
         >
           <ScreenshotButton />
           <ResetRoomButton
-            initialManifest={initialManifest}
+            initialManifest={initialManifestRef.current}
             onReset={handleRoomReset}
           />
         </div>
-
-        <CameraControls />
-        <AvatarControls />
-        <ItemControls />
+        <div style={{ flexGrow: 1, overflowY: "auto" }}>
+          <CameraControls />
+          <ItemControls /> {/* Sẽ được cập nhật để dùng ItemDataManager */}
+          <AvatarControls /> {/* Sẽ được cập nhật để dùng ItemDataManager */}
+        </div>
       </div>
 
-      {/* Right Panel - Canvas */}
-      <div
-        style={{
-          flex: 1, // Takes remaining space
-          position: "relative",
-          height: "100%",
-        }}
-      >
+      <div style={{ flex: 1, position: "relative", height: "100%" }}>
         <RoomRenderer
           roomManifest={roomManifest}
-          onSceneReady={handleSceneReady}
-          backgroundColor={backgroundColor}
+          onSceneReady={handleSceneReadyCallback} // Sử dụng callback đã đổi tên
+          // backgroundColor prop có thể không cần nữa nếu manifest quản lý màu nền
         />
       </div>
     </div>

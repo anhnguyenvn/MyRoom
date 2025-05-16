@@ -13,8 +13,8 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@babylonjs/core": "^8.7.0",
-    "@babylonjs/loaders": "^8.7.0",
+    "@babylonjs/core": "^8.8.1",
+    "@babylonjs/loaders": "^8.8.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

@@ -1,0 +1,155 @@
+{
+  "1111": {
+    "ID": "1111",
+    "Name": "HEAD",
+    "Text": "Head",
+    "Desc": "Change avatar's head appearance",
+    "Parent": "AVATAR",
+    "ActiveIcon": "",
+    "IsShow": "1"
+  },
+  "1112": {
+    "ID": "1112",
+    "Name": "BODY",
+    "Text": "Body",
+    "Desc": "Change avatar's body appearance",
+    "Parent": "AVATAR",
+    "ActiveIcon": "",
+    "IsShow": "1"
+  },
+  "1211": {
+    "ID": "1211",
+    "Name": "INDOOR",
+    "Text": "Indoor",
+    "Desc": "Indoor type MyRoom skin",
+    "Parent": "MYROOMSKIN",
+    "ActiveIcon": "",
+    "IsShow": "1"
+  },
+  "1212": {
+    "ID": "1212",
+    "Name": "OUTDOOR",
+    "Text": "Outdoor",
+    "Desc": "Outdoor type MyRoom skin",
+    "Parent": "MYROOMSKIN",
+    "ActiveIcon": "",
+    "IsShow": "1"
+  },
+  "1221": {
+    "ID": "1221",
+    "Name": "ENVLIGHT",
+    "Text": "Lighting",
+    "Desc": "MyRoom lighting",
+    "Parent": "MYROOMSKIN",
+    "ActiveIcon": "",
+    "IsShow": "1"
+  },
+  "1311": {
+    "ID": "1311",
+    "Name": "FLOOR",
+    "Text": "Floor Item",
+    "Desc": "Items placed on the floor",
+    "Parent": "MYROOMITEM",
+    "ActiveIcon": "",
+    "IsShow": "1"
+  },
+  "1312": {
+    "ID": "1312",
+    "Name": "WALL",
+    "Text": "Wall Hanging",
+    "Desc": "Items placed on the wall",
+    "Parent": "MYROOMITEM",
+    "ActiveIcon": "",
+    "IsShow": "1"
+  },
+  "1313": {
+    "ID": "1313",
+    "Name": "RUG",
+    "Text": "Rug/Mat",
+    "Desc": "Floor mat placed on the MyRoom floor",
+    "Parent": "MYROOMITEM",
+    "ActiveIcon": "",
+    "IsShow": "1"
+  },
+  "1411": {
+    "ID": "1411",
+    "Name": "INDOORCOORDI",
+    "Text": "Indoor Coordination",
+    "Desc": "Completed indoor coordination/preset",
+    "Parent": "MYROOMCOORDI",
+    "ActiveIcon": "",
+    "IsShow": "1"
+  },
+  "1412": {
+    "ID": "1412",
+    "Name": "OUTDOORCOORDI",
+    "Text": "Outdoor Coordination",
+    "Desc": "Completed outdoor coordination/preset",
+    "Parent": "MYROOMCOORDI",
+    "ActiveIcon": "",
+    "IsShow": "1"
+  },
+  "1511": {
+    "ID": "1511",
+    "Name": "DUMMY02_01",
+    "Text": "-",
+    "Desc": "-",
+    "Parent": "DUMMY01",
+    "ActiveIcon": "",
+    "IsShow": "1"
+  },
+  "1512": {
+    "ID": "1512",
+    "Name": "DUMMY02_02",
+    "Text": "-",
+    "Desc": "-",
+    "Parent": "DUMMY01",
+    "ActiveIcon": "",
+    "IsShow": "1"
+  },
+  "1611": {
+    "ID": "1611",
+    "Name": "SYSTEMAVATAR",
+    "Text": "System Avatar",
+    "Desc": "Preset information including head and body",
+    "Parent": "SYSTEMITEM",
+    "ActiveIcon": "",
+    "IsShow": "0"
+  },
+  "1621": {
+    "ID": "1621",
+    "Name": "SYSTEMMYROOM",
+    "Text": "System MyRoom",
+    "Desc": "System settings for MyRoom",
+    "Parent": "SYSTEMITEM",
+    "ActiveIcon": "",
+    "IsShow": "0"
+  },
+  "1711": {
+    "ID": "1711",
+    "Name": "STATUSANIMATIONSUB",
+    "Text": "Status Message Sub",
+    "Desc": "Meaningless status value",
+    "Parent": "STATUSANIMATION",
+    "ActiveIcon": "",
+    "IsShow": "1"
+  },
+  "1811": {
+    "ID": "1811",
+    "Name": "CONTENTSPURCHASE",
+    "Text": "Contents Purchase",
+    "Desc": "Content usage fee",
+    "Parent": "SYSTEMPURCHASE",
+    "ActiveIcon": "",
+    "IsShow": "0"
+  },
+  "1911": {
+    "ID": "1911",
+    "Name": "PROFILEITEM",
+    "Text": "Profile Item",
+    "Desc": "Items used for profile",
+    "Parent": "PROFILE",
+    "ActiveIcon": "",
+    "IsShow": "0"
+  }
+}

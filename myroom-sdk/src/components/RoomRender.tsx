@@ -1,25 +1,22 @@
-import React, { useEffect, useRef, useState } from "react";
-import {
-  Scene,
-  Engine,
-  Vector3,
-  ArcRotateCamera,
-  HemisphericLight,
-  SceneLoader,
-} from "@babylonjs/core";
+// src/components/RoomRender.tsx
+import React, { useEffect, useRef, useState, useCallback } from "react";
+import * as BABYLON from "@babylonjs/core";
 import { SceneManager } from "../core/SceneManager";
 import { IAssetManifest_MyRoom } from "../models/types";
 import LoadingScreen from "./LoadingScreen";
 import RoomStats from "./RoomStats";
 import HelpButton from "./HelpButton";
-import FullscreenButton from "./FullscreenButton";
+import FullscreenButton, { FullscreenButtonProps } from "./FullscreenButton"; // Import FullscreenButtonProps
+import itemDataManagerInstance from "../core/ItemDataManager";
 
+// Props cho RoomRenderer
 interface RoomRendererProps {
   roomManifest: IAssetManifest_MyRoom;
-  onSceneReady?: () => void;
+  onSceneReady?: () => void; // Callback khi scene BabylonJS sẵn sàng
   width?: string;
   height?: string;
-  backgroundColor?: string;
+  // backgroundColor prop có thể không còn cần thiết nếu manifest kiểm soát hoàn toàn
+  // backgroundColor?: string;
 }
 
 const RoomRenderer: React.FC<RoomRendererProps> = ({
@@ -27,93 +24,153 @@ const RoomRenderer: React.FC<RoomRendererProps> = ({
   onSceneReady,
   width = "100%",
   height = "100%",
-  backgroundColor = "#6b8cc2",
+  // backgroundColor = '#6B8CC2' // Giá trị mặc định ban đầu, sẽ bị manifest ghi đè
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const engineRef = useRef<Engine | null>(null);
-  const sceneRef = useRef<Scene | null>(null);
+  const engineRef = useRef<BABYLON.Engine | null>(null);
+  const sceneRef = useRef<BABYLON.Scene | null>(null);
   const [loadingProgress, setLoadingProgress] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Ban đầu luôn là true để chờ ItemDataManager
 
+  // Callback cho tiến trình tải của AssetsManager (hoặc SceneLoader nếu dùng riêng lẻ)
+  const handleLoadingProgress = useCallback(
+    (
+      event:
+        | BABYLON.ISceneLoaderProgressEvent
+        | { loaded: number; total: number }
+    ) => {
+      if (
+        (event as BABYLON.ISceneLoaderProgressEvent).lengthComputable !==
+          undefined &&
+        (event as BABYLON.ISceneLoaderProgressEvent).lengthComputable
+      ) {
+        const progressEvent = event as BABYLON.ISceneLoaderProgressEvent;
+        const progress = (progressEvent.loaded / progressEvent.total) * 100;
+        setLoadingProgress(progress);
+      } else if (
+        typeof (event as { loaded: number; total: number }).total ===
+          "number" &&
+        (event as { loaded: number; total: number }).total > 0
+      ) {
+        const progressEvent = event as { loaded: number; total: number };
+        const progress = (progressEvent.loaded / progressEvent.total) * 100;
+        setLoadingProgress(progress);
+      }
+      // console.log(`Loading progress: ${loadingProgress.toFixed(0)}%`);
+    },
+    []
+  );
+
+  // Effect chính để khởi tạo scene BabylonJS
   useEffect(() => {
-    if (!canvasRef.current) return;
-    // Check if asset server is running
-    fetch("http://localhost:9567/status")
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.status === "ok") {
-          console.log("Asset server is running");
-        }
-      })
-      .catch((error) => {
-        console.warn(
-          "Asset server is not running, using fallback models",
-          error
-        );
-      });
+    if (!canvasRef.current) {
+      console.warn("[RoomRenderer] Canvas ref is not available yet.");
+      return;
+    }
 
-    // Khởi tạo BabylonJS engine và scene
-    engineRef.current = new Engine(canvasRef.current, true, {
+    console.log("[RoomRenderer] Initializing BabylonJS Engine and Scene...");
+    engineRef.current = new BABYLON.Engine(canvasRef.current, true, {
       preserveDrawingBuffer: true,
       stencil: true,
+      antialias: true,
     });
-    sceneRef.current = new Scene(engineRef.current);
+    sceneRef.current = new BABYLON.Scene(engineRef.current);
+    sceneRef.current.clearColor = BABYLON.Color4.FromHexString(
+      roomManifest.main.room.backgroundColor || "#6B8CC2FF"
+    );
 
-    // Set up loading progress tracking
-    const onProgress = (evt: any) => {
-      if (evt.lengthComputable) {
-        const loadingPercentage = ((evt.loaded * 100) / evt.total).toFixed();
-        setLoadingProgress(Number(loadingPercentage));
-      }
-    };
-
-    // Register the event
-    SceneLoader.OnPluginActivatedObservable.add((plugin) => {
-      plugin.onParsedObservable.add(onProgress);
-    });
-
-    // Tạo camera
-    const camera = new ArcRotateCamera(
-      "camera",
+    const camera = new BABYLON.ArcRotateCamera(
+      "camera1",
       -Math.PI / 2,
-      Math.PI / 3,
-      10,
-      new Vector3(0, 0, 0),
+      Math.PI / 2.5,
+      15,
+      BABYLON.Vector3.Zero(),
       sceneRef.current
     );
     camera.attachControl(canvasRef.current, true);
     camera.lowerRadiusLimit = 2;
-    camera.upperRadiusLimit = 20;
+    camera.upperRadiusLimit = 50;
+    camera.wheelPrecision = 50; // Giảm độ nhạy của zoom chuột
+    camera.minZ = 0.1; // Khoảng cách gần nhất camera có thể render
 
-    // Tạo ánh sáng
-    const light = new HemisphericLight(
-      "light",
-      new Vector3(0, 1, 0),
+    const light1 = new BABYLON.HemisphericLight(
+      "light1",
+      new BABYLON.Vector3(1, 1, 0),
       sceneRef.current
     );
-    light.intensity = 0.7;
+    light1.intensity = 0.8;
+    const light2 = new BABYLON.PointLight(
+      "light2",
+      new BABYLON.Vector3(0, 5, -5),
+      sceneRef.current
+    );
+    light2.intensity = 0.5;
 
-    // Khởi tạo SceneManager
+    // Khởi tạo SceneManager và MyRoomAPI
     SceneManager.initializeScene({
       scene: sceneRef.current,
       type: "ROOM",
-      onSuccess: () => {
-        // Load room manifest
-        setIsLoading(true);
-        SceneManager.Room?.initializeMyRoom(roomManifest, false, () => {
-          console.log("Room loaded successfully");
+      onSuccess: async () => {
+        console.log(
+          "[RoomRenderer] SceneManager initialized. MyRoomAPI (SceneManager.Room) is ready."
+        );
+        setIsLoading(true); // Bắt đầu quá trình tải dữ liệu và assets
+        setLoadingProgress(0);
+
+        // Đảm bảo ItemDataManager đã tải dữ liệu trước khi khởi tạo phòng
+        if (!itemDataManagerInstance.isDataLoaded()) {
+          console.log(
+            "[RoomRenderer] Item data not loaded, attempting to load now via MyRoomAPI.initialize()..."
+          );
+          try {
+            // MyRoomAPI.initialize() cũng sẽ cố gắng tải itemData nếu chưa có
+            await SceneManager.Room?.initialize();
+          } catch (e) {
+            console.error(
+              "[RoomRenderer] Failed to ensure item data is loaded for initial room load:",
+              e
+            );
+            setIsLoading(false);
+            // Hiển thị thông báo lỗi cho người dùng ở đây
+            return;
+          }
+        }
+
+        if (!itemDataManagerInstance.isDataLoaded()) {
+          console.error(
+            "[RoomRenderer] CRITICAL: Item data failed to load. Cannot proceed with room initialization."
+          );
           setIsLoading(false);
-          if (onSceneReady) onSceneReady();
-        });
+          return;
+        }
+        console.log(
+          "[RoomRenderer] Item data is ready. Initializing room with manifest..."
+        );
+
+        SceneManager.Room?.initializeMyRoom(
+          roomManifest, // Manifest ban đầu từ App.tsx
+          false, // forRoomCoordi (giữ lại nếu MyRoomAPI cần)
+          () => {
+            // onComplete callback
+            console.log(
+              "[RoomRenderer] Initial room loaded/initialized successfully."
+            );
+            setIsLoading(false);
+            setLoadingProgress(100);
+            if (onSceneReady) onSceneReady();
+          },
+          handleLoadingProgress // onProgress callback
+        );
       },
     });
 
     // Render loop
-    engineRef.current.runRenderLoop(() => {
+    const renderLoop = () => {
       if (sceneRef.current) {
         sceneRef.current.render();
       }
-    });
+    };
+    engineRef.current.runRenderLoop(renderLoop);
 
     // Resize handler
     const handleResize = () => {
@@ -121,69 +178,93 @@ const RoomRenderer: React.FC<RoomRendererProps> = ({
         engineRef.current.resize();
       }
     };
-
     window.addEventListener("resize", handleResize);
 
-    // For manual progress updates when SceneLoader events aren't triggered
-    if (isLoading) {
-      const progressInterval = setInterval(() => {
-        // Increment progress artificially if it's stuck
-        setLoadingProgress((prev) => {
-          if (prev < 100) {
-            return Math.min(prev + 5, 95); // Max out at 95% until actually complete
-          }
-          return prev;
-        });
-
-        // Check if loading is complete
-        if (!isLoading) {
-          clearInterval(progressInterval);
-          setLoadingProgress(100);
-        }
-      }, 500);
-
-      return () => clearInterval(progressInterval);
-    }
-
+    // Cleanup
     return () => {
+      console.log("[RoomRenderer] Cleaning up RoomRenderer...");
       window.removeEventListener("resize", handleResize);
-
-      // Cleanup
       if (SceneManager.isInit("ROOM")) {
-        SceneManager.finalize("ROOM");
+        console.log("[RoomRenderer] Finalizing SceneManager for ROOM type.");
+        SceneManager.finalize("ROOM"); // Điều này sẽ gọi MyRoomAPI.finalize() và MyRoomController.dispose()
       }
-
-      engineRef.current?.dispose();
+      // Scene và Engine cũng nên được dispose nếu RoomRenderer bị unmount hoàn toàn
+      // và không có ý định tái sử dụng chúng.
+      // Tuy nhiên, SceneManager.finalize() đã bao gồm việc MyRoomController.dispose()
+      // MyRoomAPI.finalize() không dispose scene vì scene được truyền từ ngoài vào
+      // Chúng ta nên dispose scene và engine ở đây khi RoomRenderer bị unmount.
+      if (sceneRef.current) {
+        console.log("[RoomRenderer] Disposing scene.");
+        sceneRef.current.dispose();
+        sceneRef.current = null;
+      }
+      if (engineRef.current) {
+        console.log("[RoomRenderer] Disposing engine.");
+        engineRef.current.dispose();
+        engineRef.current = null;
+      }
+      console.log("[RoomRenderer] Cleanup complete.");
     };
-  }, []);
+  }, []); // Chỉ chạy một lần khi component mount
 
-  // Effect để cập nhật room khi manifest thay đổi
+  // Effect để cập nhật phòng khi roomManifest thay đổi
+  const firstManifestLoad = useRef(true);
   useEffect(() => {
-    if (SceneManager.isInit("ROOM") && roomManifest) {
-      setIsLoading(true);
-      SceneManager.Room?.clearMyRoom();
-      SceneManager.Room?.initializeMyRoom(roomManifest, false, () => {
-        console.log("Room updated successfully");
-        setIsLoading(false);
-      });
+    if (firstManifestLoad.current) {
+      firstManifestLoad.current = false;
+      // Không làm gì trong lần render đầu tiên vì useEffect ở trên đã xử lý
+      // việc tải manifest ban đầu thông qua SceneManager.initializeScene -> initializeMyRoom
+      return;
     }
-  }, [roomManifest]);
+
+    // Chỉ chạy nếu scene đã được khởi tạo, manifest thực sự thay đổi, và ItemDataManager đã sẵn sàng
+    if (
+      SceneManager.isInit("ROOM") &&
+      roomManifest &&
+      SceneManager.Room &&
+      itemDataManagerInstance.isDataLoaded()
+    ) {
+      console.log(
+        "[RoomRenderer] Room manifest prop changed, re-initializing room..."
+      );
+      setIsLoading(true);
+      setLoadingProgress(0);
+
+      SceneManager.Room.initializeMyRoom(
+        roomManifest,
+        false, // forRoomCoordi
+        () => {
+          // onComplete
+          console.log(
+            "[RoomRenderer] Room updated successfully after manifest change."
+          );
+          setIsLoading(false);
+          setLoadingProgress(100);
+        },
+        handleLoadingProgress // onProgress
+      );
+    } else if (
+      SceneManager.isInit("ROOM") &&
+      !itemDataManagerInstance.isDataLoaded()
+    ) {
+      console.warn(
+        "[RoomRenderer] Manifest changed, but item data is not ready yet. Initialization might be delayed or use stale data if not handled by MyRoomAPI.initialize()."
+      );
+    }
+  }, [roomManifest, handleLoadingProgress, onSceneReady]); // Thêm handleLoadingProgress và onSceneReady vào dependencies
 
   return (
     <>
       <canvas
         ref={canvasRef}
-        style={{
-          width,
-          height,
-          backgroundColor,
-          display: "block",
-        }}
+        style={{ width, height, display: "block", outline: "none" }}
+        touch-action="none" // Cải thiện tương tác cảm ứng
       />
       <LoadingScreen isVisible={isLoading} progress={loadingProgress} />
-      {!isLoading && <RoomStats />}
+      {!isLoading && SceneManager.isInit("ROOM") && <RoomStats />}{" "}
+      {/* Chỉ hiển thị RoomStats khi không loading và scene đã init */}
       <HelpButton />
-      <FullscreenButton />
+      <FullscreenButton targetElement={canvasRef.current?.parentElement} />
     </>
   );
 };
