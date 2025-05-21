@@ -42,6 +42,7 @@ export interface BabylonSceneHandle {
     resetCamera: () => void;
     toggleInspector: () => void;
     disposePart: (partType: string) => void;
+    loadAnimation: (animationPath: string) => Promise<void>;
 }
 
 const rotationMatrix = new Matrix(); // Khai báo ở ngoài để tái sử dụng
@@ -72,6 +73,8 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
     const defaultCameraRadius = 3.5;
     const defaultCameraTargetOffset = new Vector3(0, 1.2, 0);
 
+    const externalAnimationsRef = useRef<Record<string, AnimationGroup>>({});
+
     const resetCameraLocal = () => {
         if (cameraRef.current) {
             cameraRef.current.alpha = defaultCameraAlpha;
@@ -81,6 +84,61 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                 ? avatarRootRef.current.absolutePosition.add(defaultCameraTargetOffset)
                 : defaultCameraTargetOffset.clone();
             cameraRef.current.setTarget(targetPosition);
+        }
+    };
+
+    const loadAnimation = async (animationPath: string) => {
+        if (!sceneRef.current || !avatarRootRef.current) {
+            console.warn("BabylonScene: loadAnimation - scene or avatarRoot not ready.");
+            return;
+        }
+
+        try {
+            // Load animation file
+            const result = await SceneLoader.ImportMeshAsync(
+                "", // empty string for root mesh
+                "", // empty string for root path
+                animationPath, // full path including filename
+                sceneRef.current
+            );
+
+            if (result.animationGroups && result.animationGroups.length > 0) {
+                // Lưu animation groups
+                const animationName = animationPath.split('/').pop()?.split('.')[0] || 'animation';
+                externalAnimationsRef.current[animationName] = result.animationGroups[0];
+
+                // Áp dụng animation cho avatar
+                const animationGroup = result.animationGroups[0];
+                
+                // Tìm tất cả các mesh của avatar
+                const avatarMeshes = Object.values(loadedPartsRef.current)
+                    .flatMap(part => part.meshes);
+
+                // Áp dụng animation cho từng mesh
+                animationGroup.targetedAnimations.forEach(anim => {
+                    const targetMesh = avatarMeshes.find(mesh => 
+                        mesh.name === anim.target.name || 
+                        mesh.name.includes(anim.target.name)
+                    );
+                    
+                    if (targetMesh) {
+                        // Tạo animation mới với target là mesh của avatar
+                        const newAnim = anim.animation.clone();
+                        animationGroup.addTargetedAnimation(newAnim, targetMesh);
+                    }
+                });
+
+                // Xóa các mesh không cần thiết từ file animation
+                result.meshes.forEach(mesh => {
+                    if (!mesh.parent) {
+                        mesh.dispose();
+                    }
+                });
+
+                console.log(`Loaded animation: ${animationName}`);
+            }
+        } catch (error) {
+            console.error(`Error loading animation from ${animationPath}:`, error);
         }
     };
 
@@ -102,7 +160,8 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
         disposePart: (partType: string) => {
             console.log(`Disposing part from handle: ${partType}`);
             disposePartType(partType);
-        }
+        },
+        loadAnimation: loadAnimation
     }));
 
     const clearMeshesForType = (partType: string) => {
@@ -450,6 +509,38 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
             }
         });
     }, [modelsToLoad]);
+
+    // Thêm hàm để play animation
+    const playAnimation = (animationName: string, loop: boolean = true) => {
+        const animation = externalAnimationsRef.current[animationName];
+        if (animation) {
+            currentAnimRef.current?.stop();
+            animation.play(loop);
+            currentAnimRef.current = animation;
+            console.log(`Playing animation: ${animationName}`);
+        } else {
+            console.warn(`Animation not found: ${animationName}`);
+        }
+    };
+
+    // Thêm hàm để stop animation
+    const stopAnimation = (animationName: string) => {
+        const animation = externalAnimationsRef.current[animationName];
+        if (animation) {
+            animation.stop();
+            console.log(`Stopped animation: ${animationName}`);
+        }
+    };
+
+    // Cleanup animations khi component unmount
+    useEffect(() => {
+        return () => {
+            Object.values(externalAnimationsRef.current).forEach(anim => {
+                anim.dispose();
+            });
+            externalAnimationsRef.current = {};
+        };
+    }, []);
 
     return (
         <canvas 

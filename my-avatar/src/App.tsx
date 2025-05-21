@@ -261,6 +261,40 @@ const App: React.FC = () => {
         event.target.value = ""; // Reset input
     }, [avatarConfig]);
 
+    const handleLoadAnimation = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        // Kiểm tra kích thước file (giới hạn 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            alert("File is too large. Maximum size is 5MB.");
+            event.target.value = "";
+            return;
+        }
+
+        // Kiểm tra loại file
+        if (!file.name.toLowerCase().endsWith('.glb')) {
+            alert("Please select a valid GLB file.");
+            event.target.value = "";
+            return;
+        }
+
+        try {
+            // Đọc file dưới dạng ArrayBuffer
+            const arrayBuffer = await file.arrayBuffer();
+            const blob = new Blob([arrayBuffer], { type: 'model/gltf-binary' });
+            const fileUrl = URL.createObjectURL(blob);
+            
+            await babylonSceneRef.current?.loadAnimation(fileUrl);
+            URL.revokeObjectURL(fileUrl);
+            alert("Animation loaded successfully!");
+        } catch (error) {
+            console.error("Error loading animation:", error);
+            alert("Could not load animation. Please try again.");
+        }
+        event.target.value = ""; // Reset input
+    }, []);
+
     useEffect(() => {
         const keyMap: Record<string, keyof ActiveMovement | null> = {
             w: 'forward', s: 'backward', a: 'left', d: 'right',
@@ -331,6 +365,18 @@ const App: React.FC = () => {
                     <div className="action-buttons" style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '15px' }}>
                         <button onClick={handleResetCamera}>Reset Camera View</button>
                         <button onClick={handleToggleInspector} style={{ marginTop: '10px' }}>Toggle Scene Explorer</button>
+                        <div style={{ marginTop: '15px' }}>
+                            <label htmlFor="animationFile" style={{ display: 'block', marginBottom: '5px' }}>
+                                Load Animation (GLB):
+                            </label>
+                            <input
+                                type="file"
+                                id="animationFile"
+                                accept=".glb"
+                                onChange={handleLoadAnimation}
+                                style={{ display: 'block' }}
+                            />
+                        </div>
                     </div>
                     <div className="movement-instructions" style={{ marginTop: '20px', fontSize: '0.9em', textAlign: 'left', padding: '10px', background: '#f9f9f9', borderRadius: '4px' }}>
                         <strong>Điều khiển:</strong><br />
