@@ -264,19 +264,24 @@ const App: React.FC = () => {
     useEffect(() => {
         const keyMap: Record<string, keyof ActiveMovement | null> = {
             w: 'forward', s: 'backward', a: 'left', d: 'right',
-            q: 'turnLeft', e: 'turnRight', space: 'jump', shift: 'run',
+            q: 'turnLeft', e: 'turnRight', ' ': 'jump', shift: 'run',
             '1': 'wave', '2': 'dance'
         };
 
         const handleKeyAction = (event: KeyboardEvent, isActive: boolean) => {
+            // Chỉ xử lý khi canvas đang được focus
+            const canvas = document.querySelector('canvas');
+            if (!canvas || document.activeElement !== canvas) return;
+
             const action = keyMap[event.key.toLowerCase()];
             if (action) {
-                // Ngăn hành vi mặc định của trình duyệt cho các phím đặc biệt
-                if (['w', 's', 'a', 'd', 'q', 'e', ' ', 'shift', '1', '2'].includes(event.key.toLowerCase())) {
-                    event.preventDefault();
-                }
+                event.preventDefault();
+                event.stopPropagation();
                 setActiveMovement(prev => {
-                    if (prev[action] !== isActive) return { ...prev, [action]: isActive };
+                    if (prev[action] !== isActive) {
+                        console.log(`Setting ${action} to ${isActive}`);
+                        return { ...prev, [action]: isActive };
+                    }
                     return prev;
                 });
             }
@@ -285,11 +290,24 @@ const App: React.FC = () => {
         const onKeyDown = (e: KeyboardEvent) => handleKeyAction(e, true);
         const onKeyUp = (e: KeyboardEvent) => handleKeyAction(e, false);
 
-        window.addEventListener('keydown', onKeyDown);
-        window.addEventListener('keyup', onKeyUp);
+        window.addEventListener('keydown', onKeyDown, true);
+        window.addEventListener('keyup', onKeyUp, true);
+
+        // Thêm click handler để focus canvas
+        const handleCanvasClick = () => {
+            const canvas = document.querySelector('canvas');
+            if (canvas) {
+                canvas.focus();
+                console.log('Canvas focused via click');
+            }
+        };
+
+        document.addEventListener('click', handleCanvasClick);
+
         return () => {
-            window.removeEventListener('keydown', onKeyDown);
-            window.removeEventListener('keyup', onKeyUp);
+            window.removeEventListener('keydown', onKeyDown, true);
+            window.removeEventListener('keyup', onKeyUp, true);
+            document.removeEventListener('click', handleCanvasClick);
         };
     }, []);
 
