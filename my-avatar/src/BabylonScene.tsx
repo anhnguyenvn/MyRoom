@@ -22,6 +22,10 @@ export interface ActiveMovement {
     right: boolean;
     turnLeft: boolean;
     turnRight: boolean;
+    jump: boolean;
+    run: boolean;
+    wave: boolean;
+    dance: boolean;
 }
 
 interface BabylonSceneProps {
@@ -52,8 +56,16 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
     const [isInspectorVisible, setIsInspectorVisible] = useState(false);
 
     const idleAnimRef = useRef<Nullable<AnimationGroup>>(null);
+    const walkAnimRef = useRef<Nullable<AnimationGroup>>(null);
     const runAnimRef = useRef<Nullable<AnimationGroup>>(null);
+    const jumpAnimRef = useRef<Nullable<AnimationGroup>>(null);
+    const waveAnimRef = useRef<Nullable<AnimationGroup>>(null);
+    const danceAnimRef = useRef<Nullable<AnimationGroup>>(null);
     const currentAnimRef = useRef<Nullable<AnimationGroup>>(null);
+    const isJumpingRef = useRef(false);
+    const jumpStartTimeRef = useRef(0);
+    const jumpHeight = 1.5;
+    const jumpDuration = 1000; // milliseconds
 
     const defaultCameraAlpha = -Math.PI / 1.5;
     const defaultCameraBeta = Math.PI / 2.5;
@@ -95,8 +107,11 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
 
     const clearMeshesForType = (partType: string) => {
         if (partType === 'body') {
-            idleAnimRef.current?.stop(); runAnimRef.current?.stop();
-            idleAnimRef.current = null; runAnimRef.current = null; currentAnimRef.current = null;
+            idleAnimRef.current?.stop(); walkAnimRef.current?.stop(); runAnimRef.current?.stop();
+            jumpAnimRef.current?.stop(); waveAnimRef.current?.stop(); danceAnimRef.current?.stop();
+            idleAnimRef.current = null; walkAnimRef.current = null; runAnimRef.current = null;
+            jumpAnimRef.current = null; waveAnimRef.current = null; danceAnimRef.current = null;
+            currentAnimRef.current = null;
         }
         const partEntry = loadedPartsRef.current[partType];
         if (partEntry) {
@@ -212,12 +227,24 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                 });
 
                 if (partType === 'body' && result.animationGroups) {
-                    idleAnimRef.current = result.animationGroups.find(ag => ag.name.toLowerCase().includes("idle")) || null;
-                    runAnimRef.current = result.animationGroups.find(ag => ag.name.toLowerCase().includes("run") || ag.name.toLowerCase().includes("walk")) || null;
+                    // Tìm và lưu các animation
+                    idleAnimRef.current = result.animationGroups.find(ag => 
+                        ag.name.toLowerCase().includes("idle")) || null;
+                    walkAnimRef.current = result.animationGroups.find(ag => 
+                        ag.name.toLowerCase().includes("walk")) || null;
+                    runAnimRef.current = result.animationGroups.find(ag => 
+                        ag.name.toLowerCase().includes("run")) || null;
+                    jumpAnimRef.current = result.animationGroups.find(ag => 
+                        ag.name.toLowerCase().includes("jump")) || null;
+                    waveAnimRef.current = result.animationGroups.find(ag => 
+                        ag.name.toLowerCase().includes("wave")) || null;
+                    danceAnimRef.current = result.animationGroups.find(ag => 
+                        ag.name.toLowerCase().includes("dance")) || null;
+
+                    // Bắt đầu với animation idle
                     if (idleAnimRef.current) {
-                        idleAnimRef.current.play(true); currentAnimRef.current = idleAnimRef.current;
-                    } else if (runAnimRef.current) {
-                        runAnimRef.current.play(true); currentAnimRef.current = runAnimRef.current;
+                        idleAnimRef.current.play(true);
+                        currentAnimRef.current = idleAnimRef.current;
                     }
                 }
             }
@@ -241,7 +268,7 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
             cameraTargetNode.parent = avatarRootRef.current;
             cameraTargetNode.position.copyFrom(defaultCameraTargetOffset);
 
-            const camera = new ArcRotateCamera("camera", defaultCameraAlpha, defaultCameraBeta, defaultCameraRadius, cameraTargetNode, babylonScene);
+            const camera = new ArcRotateCamera("camera", defaultCameraAlpha, defaultCameraBeta, defaultCameraRadius, cameraTargetNode.position, babylonScene);
             camera.attachControl(reactCanvas.current, false);
             camera.lowerRadiusLimit = 0.5; camera.upperRadiusLimit = 10;
             camera.wheelDeltaPercentage = 0.01; camera.minZ = 0.1;
@@ -260,49 +287,111 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
             ground.material = groundMaterial;
 
             const movementSpeed = 1.8;
+            const runSpeed = 3.6;
             const rotationSpeed = 2.5;
+            const jumpForce = 10;
 
             const sceneObserver = babylonScene.onBeforeRenderObservable.add(() => {
                 if (!avatarRootRef.current || !engineRef.current) return;
                 const deltaTime = engineRef.current.getDeltaTime() / 1000.0;
                 let isMoving = false;
                 const moveDirection = Vector3.Zero();
-                if (avatarRootRef.current.rotationQuaternion) {
-                    avatarRootRef.current.rotationQuaternion.toRotationMatrix(rotationMatrix);
-                }
-                const forwardLocal = Vector3.Forward(); // (0,0,1)
-                const rightLocal = Vector3.Right(); // (1,0,0)
-                
-                const worldForward = Vector3.TransformCoordinates(forwardLocal, rotationMatrix);
-                const worldRight = Vector3.TransformCoordinates(rightLocal, rotationMatrix);
 
+                // Lấy hướng di chuyển dựa trên góc xoay của camera
+                const cameraDirection = camera.getDirection(Vector3.Forward());
+                const cameraRight = camera.getDirection(Vector3.Right());
+                cameraDirection.y = 0;
+                cameraRight.y = 0;
+                cameraDirection.normalize();
+                cameraRight.normalize();
 
-                if (activeMovement.forward) { moveDirection.addInPlace(worldForward); isMoving = true; }
-                if (activeMovement.backward) { moveDirection.subtractInPlace(worldForward); isMoving = true; }
-                if (activeMovement.right) { moveDirection.addInPlace(worldRight); isMoving = true; }
-                if (activeMovement.left) { moveDirection.subtractInPlace(worldRight); isMoving = true; }
+                // Xử lý di chuyển
+                const currentSpeed = activeMovement.run ? runSpeed : movementSpeed;
+                if (activeMovement.forward) { moveDirection.addInPlace(cameraDirection); isMoving = true; }
+                if (activeMovement.backward) { moveDirection.subtractInPlace(cameraDirection); isMoving = true; }
+                if (activeMovement.right) { moveDirection.addInPlace(cameraRight); isMoving = true; }
+                if (activeMovement.left) { moveDirection.subtractInPlace(cameraRight); isMoving = true; }
 
-                if (isMoving && moveDirection.lengthSquared() > 0.001) { // Thêm ngưỡng nhỏ để tránh di chuyển khi không cần
-                    moveDirection.normalize().scaleInPlace(movementSpeed * deltaTime);
+                if (isMoving && moveDirection.lengthSquared() > 0.001) {
+                    moveDirection.normalize().scaleInPlace(currentSpeed * deltaTime);
                     avatarRootRef.current.position.addInPlace(moveDirection);
-                }
-                let rotationAmount = 0;
-                if (activeMovement.turnLeft) { rotationAmount = -rotationSpeed * deltaTime; isMoving = true;}
-                if (activeMovement.turnRight) { rotationAmount = rotationSpeed * deltaTime; isMoving = true;}
-                if (rotationAmount !== 0 && avatarRootRef.current.rotationQuaternion) {
-                    const rotationDelta = Quaternion.RotationAxis(Vector3.UpReadOnly, rotationAmount);
-                    avatarRootRef.current.rotationQuaternion.multiplyToRef(rotationDelta, avatarRootRef.current.rotationQuaternion);
+
+                    // Xoay avatar theo hướng di chuyển
+                    if (moveDirection.lengthSquared() > 0.001) {
+                        const targetRotation = Math.atan2(moveDirection.x, moveDirection.z);
+                        const currentRotation = avatarRootRef.current.rotation.y;
+                        let rotationDelta = targetRotation - currentRotation;
+
+                        // Đảm bảo góc xoay ngắn nhất
+                        if (rotationDelta > Math.PI) rotationDelta -= 2 * Math.PI;
+                        if (rotationDelta < -Math.PI) rotationDelta += 2 * Math.PI;
+
+                        // Xoay mượt mà
+                        const rotationSpeed = 5 * deltaTime;
+                        const newRotation = currentRotation + rotationDelta * rotationSpeed;
+                        avatarRootRef.current.rotation.y = newRotation;
+                    }
                 }
 
-                if (isMoving) {
-                    if (currentAnimRef.current !== runAnimRef.current && runAnimRef.current) {
-                        idleAnimRef.current?.stop(); runAnimRef.current.play(true); currentAnimRef.current = runAnimRef.current;
+                // Xử lý xoay
+                let rotationAmount = 0;
+                if (activeMovement.turnLeft) { rotationAmount = -rotationSpeed * deltaTime; isMoving = true; }
+                if (activeMovement.turnRight) { rotationAmount = rotationSpeed * deltaTime; isMoving = true; }
+                if (rotationAmount !== 0) {
+                    avatarRootRef.current.rotation.y += rotationAmount;
+                }
+
+                // Xử lý nhảy
+                if (activeMovement.jump && !isJumpingRef.current) {
+                    isJumpingRef.current = true;
+                    jumpStartTimeRef.current = Date.now();
+                    if (jumpAnimRef.current) {
+                        currentAnimRef.current?.stop();
+                        jumpAnimRef.current.play(true);
+                        currentAnimRef.current = jumpAnimRef.current;
                     }
-                } else {
-                    if (currentAnimRef.current !== idleAnimRef.current && idleAnimRef.current) {
-                        runAnimRef.current?.stop(); idleAnimRef.current.play(true); currentAnimRef.current = idleAnimRef.current;
-                    } else if (!idleAnimRef.current && currentAnimRef.current !== null) {
-                        currentAnimRef.current?.stop(); currentAnimRef.current = null;
+                }
+
+                if (isJumpingRef.current) {
+                    const jumpTime = Date.now() - jumpStartTimeRef.current;
+                    const jumpProgress = Math.min(jumpTime / jumpDuration, 1);
+                    const jumpHeight = Math.sin(jumpProgress * Math.PI) * 1.5;
+                    avatarRootRef.current.position.y = jumpHeight;
+
+                    if (jumpProgress >= 1) {
+                        isJumpingRef.current = false;
+                        avatarRootRef.current.position.y = 0;
+                    }
+                }
+
+                // Xử lý animation
+                if (activeMovement.wave && waveAnimRef.current) {
+                    currentAnimRef.current?.stop();
+                    waveAnimRef.current.play(true);
+                    currentAnimRef.current = waveAnimRef.current;
+                } else if (activeMovement.dance && danceAnimRef.current) {
+                    currentAnimRef.current?.stop();
+                    danceAnimRef.current.play(true);
+                    currentAnimRef.current = danceAnimRef.current;
+                } else if (isMoving) {
+                    if (activeMovement.run && runAnimRef.current) {
+                        if (currentAnimRef.current !== runAnimRef.current) {
+                            currentAnimRef.current?.stop();
+                            runAnimRef.current.play(true);
+                            currentAnimRef.current = runAnimRef.current;
+                        }
+                    } else if (walkAnimRef.current) {
+                        if (currentAnimRef.current !== walkAnimRef.current) {
+                            currentAnimRef.current?.stop();
+                            walkAnimRef.current.play(true);
+                            currentAnimRef.current = walkAnimRef.current;
+                        }
+                    }
+                } else if (!isJumpingRef.current && idleAnimRef.current) {
+                    if (currentAnimRef.current !== idleAnimRef.current) {
+                        currentAnimRef.current?.stop();
+                        idleAnimRef.current.play(true);
+                        currentAnimRef.current = idleAnimRef.current;
                     }
                 }
             });
@@ -319,7 +408,9 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                 loadedPartsRef.current = {};
                 sceneRef.current?.dispose(); engineRef.current?.dispose();
                 sceneRef.current = null; engineRef.current = null; cameraRef.current = null;
-                idleAnimRef.current = null; runAnimRef.current = null; currentAnimRef.current = null;
+                idleAnimRef.current = null; walkAnimRef.current = null; runAnimRef.current = null;
+                jumpAnimRef.current = null; waveAnimRef.current = null; danceAnimRef.current = null;
+                currentAnimRef.current = null;
             };
         }
     }, []);
@@ -360,7 +451,28 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
         });
     }, [modelsToLoad]);
 
-    return <canvas ref={reactCanvas} style={{ width: '100%', height: '100%', touchAction: 'none', outline: 'none' }} />;
+    return (
+        <canvas 
+            ref={reactCanvas} 
+            style={{ width: '100%', height: '100%', touchAction: 'none', outline: 'none' }}
+            tabIndex={0}
+            onFocus={(e) => {
+                e.target.style.outline = 'none';
+                console.log('Canvas focused');
+            }}
+            onBlur={(e) => {
+                console.log('Canvas blurred');
+            }}
+            onKeyDown={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            }}
+            onKeyUp={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+            }}
+        />
+    );
 });
 
 export default memo(BabylonScene);

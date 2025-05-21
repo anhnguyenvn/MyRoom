@@ -10,7 +10,9 @@ const App: React.FC = () => {
     const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(() => getDefaultConfigForGender('male'));
     const babylonSceneRef = useRef<BabylonSceneHandle>(null);
     const [activeMovement, setActiveMovement] = useState<ActiveMovement>({
-        forward: false, backward: false, left: false, right: false, turnLeft: false, turnRight: false
+        forward: false, backward: false, left: false, right: false,
+        turnLeft: false, turnRight: false, jump: false, run: false,
+        wave: false, dance: false
     });
 
     const modelsToLoad: ModelInfo[] = useMemo(() => {
@@ -103,67 +105,174 @@ const App: React.FC = () => {
 
     const handleSaveAvatar = useCallback(() => {
         try {
-            const jsonString = JSON.stringify(avatarConfig, null, 2);
+            // Tạo một bản sao của config để loại bỏ các trường không cần thiết
+            const configToSave = {
+                gender: avatarConfig.gender,
+                parts: { ...avatarConfig.parts },
+                colors: { ...avatarConfig.colors }
+            };
+
+            // Loại bỏ các part null và color không cần thiết
+            Object.keys(configToSave.parts).forEach(key => {
+                if (configToSave.parts[key] === null) {
+                    delete configToSave.parts[key];
+                }
+            });
+
+            Object.keys(configToSave.colors).forEach(key => {
+                if (!configToSave.parts[key]) {
+                    delete configToSave.colors[key];
+                }
+            });
+
+            const jsonString = JSON.stringify(configToSave, null, 2);
             const blob = new Blob([jsonString], { type: "application/json" });
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
-            link.download = `avatar_config_${Date.now()}.json`;
-            document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            link.download = `avatar_${avatarConfig.gender}_${new Date().toISOString().slice(0,10)}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
             URL.revokeObjectURL(link.href);
-        } catch (error) { console.error("Error saving avatar:", error); alert("Could not save avatar config."); }
+        } catch (error) {
+            console.error("Error saving avatar:", error);
+            alert("Could not save avatar config. Please try again.");
+        }
     }, [avatarConfig]);
 
     const handleLoadAvatar = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    if (typeof e.target?.result !== 'string') throw new Error("File content not string.");
-                    const loaded: AvatarConfig = JSON.parse(e.target.result);
-                    if (loaded.gender && availablePartsData[loaded.gender] && loaded.parts && loaded.colors) {
-                        const baseConfig = getDefaultConfigForGender(loaded.gender);
-                        const validatedConfig: AvatarConfig = {
-                            gender: loaded.gender, parts: { ...baseConfig.parts }, colors: { ...baseConfig.colors },
-                        };
-                        for (const partKey in loaded.parts) {
-                            if (validatedConfig.parts.hasOwnProperty(partKey)) {
-                                const loadedFile = loaded.parts[partKey];
-                                const selectablePartsForGender = availablePartsData[loaded.gender].selectableParts;
-                                if (selectablePartsForGender.hasOwnProperty(partKey)) {
-                                    const isValid = (selectablePartsForGender[partKey as keyof typeof selectablePartsForGender] || [])
-                                        .some(p => p.fileName === loadedFile);
-                                    if (isValid || loadedFile === null) validatedConfig.parts[partKey] = loadedFile;
-                                }
-                            }
-                        }
-                        for (const colorKey in loaded.colors) {
-                            if (validatedConfig.colors.hasOwnProperty(colorKey) || (validatedConfig.parts[colorKey] !== null && validatedConfig.parts[colorKey] !== undefined)) {
-                                validatedConfig.colors[colorKey] = loaded.colors[colorKey];
-                            }
-                        }
-                        setAvatarConfig(validatedConfig);
-                    } else { alert("Invalid avatar config file structure or gender."); }
-                } catch (err) {
-                    console.error("Error parsing JSON:", err);
-                    alert(`Invalid JSON: ${err instanceof Error ? err.message : "Unknown error"}`);
-                }
-            };
-            reader.onerror = () => alert("Could not read file.");
-            reader.readAsText(file);
-            if (event.target) event.target.value = "";
+        if (!file) return;
+
+        // Kiểm tra kích thước file (giới hạn 1MB)
+        if (file.size > 1024 * 1024) {
+            alert("File is too large. Maximum size is 1MB.");
+            event.target.value = "";
+            return;
         }
-    }, []);
+
+        // Kiểm tra loại file
+        if (file.type !== "application/json") {
+            alert("Please select a valid JSON file.");
+            event.target.value = "";
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                if (typeof e.target?.result !== 'string') {
+                    throw new Error("File content is not a string");
+                }
+
+                const loaded: AvatarConfig = JSON.parse(e.target.result);
+
+                // Validate cấu trúc cơ bản
+                if (!loaded.gender || !loaded.parts || !loaded.colors) {
+                    throw new Error("Invalid avatar config structure");
+                }
+
+                // Validate gender
+                if (!availablePartsData[loaded.gender]) {
+                    throw new Error(`Invalid gender: ${loaded.gender}`);
+                }
+
+                // Dispose tất cả các part hiện tại
+                const currentConfig = avatarConfig;
+                const currentGenderData = availablePartsData[currentConfig.gender];
+                
+                // Dispose selectable parts
+                for (const partType in currentGenderData.selectableParts) {
+                    if (currentConfig.parts[partType]) {
+                        babylonSceneRef.current?.disposePart?.(partType);
+                    }
+                }
+
+                // Dispose fixed parts
+                for (const partType in currentGenderData.fixedParts) {
+                    if (currentConfig.parts[partType]) {
+                        babylonSceneRef.current?.disposePart?.(partType);
+                    }
+                }
+
+                // Tạo config mới với validation
+                const baseConfig = getDefaultConfigForGender(loaded.gender);
+                const validatedConfig: AvatarConfig = {
+                    gender: loaded.gender,
+                    parts: { ...baseConfig.parts },
+                    colors: { ...baseConfig.colors }
+                };
+
+                // Validate và set parts
+                const selectablePartsForGender = availablePartsData[loaded.gender].selectableParts;
+                for (const partKey in loaded.parts) {
+                    if (validatedConfig.parts.hasOwnProperty(partKey)) {
+                        const loadedFile = loaded.parts[partKey];
+                        if (selectablePartsForGender.hasOwnProperty(partKey)) {
+                            const isValid = (selectablePartsForGender[partKey as keyof typeof selectablePartsForGender] || [])
+                                .some(p => p.fileName === loadedFile);
+                            if (isValid || loadedFile === null) {
+                                validatedConfig.parts[partKey] = loadedFile;
+                            } else {
+                                console.warn(`Invalid file for part ${partKey}: ${loadedFile}`);
+                                validatedConfig.parts[partKey] = null;
+                            }
+                        }
+                    }
+                }
+
+                // Validate và set colors
+                for (const colorKey in loaded.colors) {
+                    if (validatedConfig.parts[colorKey] && loaded.colors[colorKey]) {
+                        // Validate color format
+                        const colorRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
+                        if (colorRegex.test(loaded.colors[colorKey])) {
+                            validatedConfig.colors[colorKey] = loaded.colors[colorKey];
+                        } else {
+                            console.warn(`Invalid color format for ${colorKey}: ${loaded.colors[colorKey]}`);
+                            validatedConfig.colors[colorKey] = baseConfig.colors[colorKey] || '#FFFFFF';
+                        }
+                    }
+                }
+
+                // Xử lý fullset và clothing parts
+                if (validatedConfig.parts.fullset) {
+                    validatedConfig.parts.top = null;
+                    validatedConfig.parts.bottom = null;
+                    validatedConfig.parts.shoes = null;
+                    delete validatedConfig.colors.top;
+                    delete validatedConfig.colors.bottom;
+                    delete validatedConfig.colors.shoes;
+                }
+
+                setAvatarConfig(validatedConfig);
+                alert("Avatar loaded successfully!");
+            } catch (err) {
+                console.error("Error loading avatar:", err);
+                alert(`Error loading avatar: ${err instanceof Error ? err.message : "Unknown error"}`);
+            }
+        };
+
+        reader.onerror = () => {
+            alert("Error reading file. Please try again.");
+        };
+
+        reader.readAsText(file);
+        event.target.value = ""; // Reset input
+    }, [avatarConfig]);
 
     useEffect(() => {
         const keyMap: Record<string, keyof ActiveMovement | null> = {
-            w: 'forward', s: 'backward', a: 'left', d: 'right', q: 'turnLeft', e: 'turnRight'
+            w: 'forward', s: 'backward', a: 'left', d: 'right',
+            q: 'turnLeft', e: 'turnRight', space: 'jump', shift: 'run',
+            '1': 'wave', '2': 'dance'
         };
+
         const handleKeyAction = (event: KeyboardEvent, isActive: boolean) => {
             const action = keyMap[event.key.toLowerCase()];
             if (action) {
-                // Ngăn hành vi mặc định của trình duyệt cho các phím mũi tên, space, v.v. nếu chúng được dùng để di chuyển
-                if (['w', 's', 'a', 'd', 'q', 'e'].includes(event.key.toLowerCase())) {
+                // Ngăn hành vi mặc định của trình duyệt cho các phím đặc biệt
+                if (['w', 's', 'a', 'd', 'q', 'e', ' ', 'shift', '1', '2'].includes(event.key.toLowerCase())) {
                     event.preventDefault();
                 }
                 setActiveMovement(prev => {
@@ -172,6 +281,7 @@ const App: React.FC = () => {
                 });
             }
         };
+
         const onKeyDown = (e: KeyboardEvent) => handleKeyAction(e, true);
         const onKeyUp = (e: KeyboardEvent) => handleKeyAction(e, false);
 
@@ -208,7 +318,11 @@ const App: React.FC = () => {
                         <strong>Điều khiển:</strong><br />
                         W: Tiến, S: Lùi<br />
                         A: Sang trái (Strafe), D: Sang phải (Strafe)<br />
-                        Q: Xoay trái, E: Xoay phải
+                        Q: Xoay trái, E: Xoay phải<br />
+                        Space: Nhảy<br />
+                        Shift: Chạy<br />
+                        1: Vẫy tay<br />
+                        2: Nhảy múa
                     </div>
                 </div>
             </div>
