@@ -11,11 +11,12 @@ export interface GenderSelectableParts {
   bottom?: PartItem[];
   shoes?: PartItem[];
   accessory?: PartItem[];
+  fullset?: PartItem[];
 }
 
 export interface GenderFixedParts {
   body: string;
-  head: string;
+  // head: string;
 }
 
 export interface GenderDefaultColors {
@@ -24,6 +25,7 @@ export interface GenderDefaultColors {
   bottom?: string;
   shoes?: string;
   accessory?: string;
+  fullset?: string;
   [key: string]: string | undefined; // Cho phép các loại màu khác
 }
 
@@ -41,91 +43,111 @@ export interface AvailableParts {
 export const availablePartsData: AvailableParts = {
   male: {
     fixedParts: {
-      body: "/models/male/body/male_body.glb",
-      head: "/models/male/head/male_head.glb",
+      body: "/models/male/male_body/male_body.glb",
     },
+  
     selectableParts: {
       hair: [
-        { name: "No Hair", fileName: null },
-        {
-          name: "Male Hair Style 1", fileName: "/models/male/hair/male_hair_1.glb",
-        },
-        {
-          name: "Male Hair Style 2", fileName: "/models/male/hair/male_hair_2.glb",
-        },
-        {
-          name: "Male Hair Style 3", fileName: "/models/male/hair/male_hair_3.glb",
-        },
-        {
-          name: "Male Hair Style 4", fileName: "/models/male/hair/male_hair_4.glb",
-        },
+        { name: "No Hair",              fileName: null },
+        { name: "Male Hair Style 1",    fileName: "/models/male/male_hair/male_hair_001.glb" },
+        { name: "Male Hair Style 2",    fileName: "/models/male/male_hair/male_hair_002.glb" },
+        { name: "Male Hair Style 3",    fileName: "/models/male/male_hair/male_hair_003.glb" },
       ],
+  
       top: [
-        { name: "No Top", fileName: null },
-        { name: "Male T-Shirt 1", fileName: "/models/male/top/male_top_1.glb" },
-        { name: "Male T-Shirt 2", fileName: "/models/male/top/male_top_2.glb" },
-        { name: "Male T-Shirt 3", fileName: "/models/male/top/male_top_3.glb" },
+        { name: "No Top",               fileName: null },
+        { name: "Male T-Shirt 1",       fileName: "/models/male/male_top/male_top_001.glb" },
+        { name: "Male Jacket 1",        fileName: "/models/male/male_top/male_top_002.glb" },
       ],
-      shoes: [
-        { name: "No Shoes", fileName: null },
-        { name: "Male Shoes 1", fileName: "/models/male/shoes/male_shoes_1.glb" },
-      ],
+  
       bottom: [
-        { name: "No Bottom", fileName: null },
-        { name: "Male Pant 1", fileName: "/models/male/bottom/male_bottom_1.glb" },
-        { name: "Male Pant 2", fileName: "/models/male/bottom/male_bottom_2.glb" },
-        { name: "Male Pant 3", fileName: "/models/male/bottom/male_bottom_3.glb" },
-    ],
+        { name: "No Bottom",            fileName: null },
+        { name: "Male Pant 1",          fileName: "/models/male/male_bottom/male_bottom_001.glb" },
+      ],
+  
+      shoes: [
+        { name: "No Shoes",             fileName: null },
+        { name: "Male Shoes 1",         fileName: "/models/male/male_shoes/male_shoes_001.glb" },
+        { name: "Male Shoes 2",         fileName: "/models/male/male_shoes/male_shoes_002.glb" },
+        { name: "Male Shoes 3",         fileName: "/models/male/male_shoes/male_shoes_003.glb" },
+      ],
+  
+      fullset: [
+        { name: "No Fullset",           fileName: null },
+        { name: "Male Fullset 1",       fileName: "/models/male/male_fullset/male_fullset_001.glb" },
+        { name: "Male Fullset 2",       fileName: "/models/male/male_fullset/male_fullset_002.glb" },
+        { name: "Male Fullset 3",       fileName: "/models/male/male_fullset/male_fullset_003.glb" },
+        { name: "Male Fullset 4",       fileName: "/models/male/male_fullset/male_fullset_004.glb" },
+        { name: "Male Fullset 5",       fileName: "/models/male/male_fullset/male_fullset_005.glb" },
+      ],
+  
+      accessory: [
+        { name: "No Accessory",         fileName: null },
+        { name: "Male Accessory 1",     fileName: "/models/male/male_acc/male_acc_001.glb" },
+        { name: "Male Accessory 2",     fileName: "/models/male/male_acc/male_acc_002.glb" },
+      ],
     },
+  
     defaultColors: {
       hair: "#4A301B",
-      top: "#1E90FF",
+      top:  "#1E90FF",
     },
   },
+
   female: {
     fixedParts: {
-      body: "/models/female/body/female_body.glb",
-      head: "/models/female/head/female_head.glb",
+      body: "/models/female/female_body/female_body.glb",
     },
+  
     selectableParts: {
       hair: [
-        { name: "No Hair", fileName: null },
-        {
-          name: "Female Hair Style 1",
-          fileName: "/models/female/hair/female_hair_1.glb",
-        },
-        {
-          name: "Female Hair Style 2",
-          fileName: "/models/female/hair/female_hair_2.glb",
-        },
+        { name: "No Hair",               fileName: null },
+        { name: "Female Hair Style 1",   fileName: "/models/female/female_hair/female_hair_001.glb" },
+        { name: "Female Hair Style 2",   fileName: "/models/female/female_hair/female_hair_002.glb" },
+        { name: "Female Hair Style 3",   fileName: "/models/female/female_hair/female_hair_003.glb" },
+        { name: "Female Hair Style 4",   fileName: "/models/female/female_hair/female_hair_004.glb" },
+        { name: "Female Hair Style 5",   fileName: "/models/female/female_hair/female_hair_005.glb" },
       ],
+  
       top: [
-        { name: "No Top", fileName: null },
-        { name: "Female shirt 1", fileName: "/models/female/top/female_top_1.glb"},
-        { name: "Female shirt 2", fileName: "/models/female/top/female_top_2.glb"},
-        { name: "Female shirt 3", fileName: "/models/female/top/female_top_3.glb"},
-        { name: "Female shirt 4", fileName: "/models/female/top/female_top_4.glb"},
-        { name: "Female shirt 5", fileName: "/models/female/top/female_top_5.glb"},
+        { name: "No Top",                fileName: null },
+        { name: "Female Top 1",          fileName: "/models/female/female_top/female_top_001.glb" },
+        { name: "Female Top 2",          fileName: "/models/female/female_top/female_top_002.glb" },
+        { name: "Female Top 3",          fileName: "/models/female/female_top/female_top_003.glb" },
       ],
-      shoes: [
-        { name: "No Shoes", fileName: null },
-        { name: "Female Shoes 1", fileName: "/models/female/shoes/female_shoes_1.glb" },
-        { name: "Female Shoes 2", fileName: "/models/female/shoes/female_shoes_2.glb" },
-        { name: "Female Shoes 3", fileName: "/models/female/shoes/female_shoes_3.glb" },
-      ],
+  
       bottom: [
-        { name: "No Bottom", fileName: null },
-        { name: "Female Pant 1", fileName: "/models/female/bottom/female_bottom_1.glb" },
-        { name: "Female Pant 2", fileName: "/models/female/bottom/female_bottom_2.glb" },
-        { name: "Female Pant 3", fileName: "/models/female/bottom/female_bottom_3.glb" },
-        { name: "Female Pant 4", fileName: "/models/female/bottom/female_bottom_3.glb" },
-    ],
+        { name: "No Bottom",             fileName: null },
+        { name: "Female Bottom 1",       fileName: "/models/female/female_bottom/female_bottom_001.glb" },
+        { name: "Female Bottom 2",       fileName: "/models/female/female_bottom/female_bottom_002.glb" },
+      ],
+  
+      shoes: [
+        { name: "No Shoes",              fileName: null },
+        { name: "Female Shoes 1",        fileName: "/models/female/female_shoes/female_shoes_001.glb" },
+      ],
+  
+      fullset: [
+        { name: "No Fullset",            fileName: null },
+        { name: "Female Fullset 1",      fileName: "/models/female/female_fullset/female_fullset_001.glb" },
+        { name: "Female Fullset 2",      fileName: "/models/female/female_fullset/female_fullset_002.glb" },
+        { name: "Female Fullset 3",      fileName: "/models/female/female_fullset/female_fullset_003.glb" },
+        { name: "Female Fullset 4",      fileName: "/models/female/female_fullset/female_fullset_004.glb" },
+      ],
+  
+      accessory: [
+        { name: "No Accessory",          fileName: null },
+        { name: "Female Accessory 1",    fileName: "/models/female/female_acc/female_acc_001.glb" },
+        { name: "Female Accessory 2",    fileName: "/models/female/female_acc/female_acc_002.glb" },
+        { name: "Female Accessory 3",    fileName: "/models/female/female_acc/female_acc_003.glb" },
+      ],
     },
+  
     defaultColors: {
-      hair: "#C9A96A",
-      top: "#FF69B4",
+      hair: "#5E3D25",
+      top:  "#FF69B4",
     },
-  },
+  }  
 };
 
 export interface AvatarPartPaths {

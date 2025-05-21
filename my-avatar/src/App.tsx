@@ -2,13 +2,16 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import './App.css';
 import './AvatarControls.css';
-import BabylonScene, { ModelInfo, BabylonSceneHandle } from './BabylonScene';
+import BabylonScene, { ModelInfo, BabylonSceneHandle, ActiveMovement } from './BabylonScene';
 import AvatarControls from './AvatarControls';
 import { availablePartsData, getDefaultConfigForGender, AvatarConfig, Gender, AvatarPartPaths, AvatarColors } from './avatarPartsData';
 
 const App: React.FC = () => {
     const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(() => getDefaultConfigForGender('male'));
     const babylonSceneRef = useRef<BabylonSceneHandle>(null);
+    const [activeMovement, setActiveMovement] = useState<ActiveMovement>({
+        forward: false, backward: false, left: false, right: false, turnLeft: false, turnRight: false
+    });
 
     const modelsToLoad: ModelInfo[] = useMemo(() => {
         const newModels: ModelInfo[] = [];
@@ -18,19 +21,13 @@ const App: React.FC = () => {
         for (const partType in genderData.fixedParts) {
             const path = genderData.fixedParts[partType as keyof typeof genderData.fixedParts];
             if (path) {
-                newModels.push({
-                    type: partType, path: path,
-                    color: avatarConfig.colors[partType] || genderData.defaultColors[partType]
-                });
+                newModels.push({ type: partType, path: path, color: avatarConfig.colors[partType] || genderData.defaultColors[partType] });
             }
         }
         for (const partType in genderData.selectableParts) {
             const path = avatarConfig.parts[partType];
             if (path) {
-                newModels.push({
-                    type: partType, path: path,
-                    color: avatarConfig.colors[partType] || genderData.defaultColors[partType]
-                });
+                newModels.push({ type: partType, path: path, color: avatarConfig.colors[partType] || genderData.defaultColors[partType] });
             }
         }
         return newModels;
@@ -47,7 +44,6 @@ const App: React.FC = () => {
             const newParts: AvatarPartPaths = { ...prevConfig.parts, [partType]: fileName };
             const newColors: AvatarColors = { ...prevConfig.colors };
             const defaultColorForPart = availablePartsData[prevConfig.gender]?.defaultColors?.[partType];
-
             if (fileName !== null && !newColors[partType]) {
                 newColors[partType] = defaultColorForPart || '#FFFFFF';
             } else if (fileName === null) {
@@ -59,8 +55,7 @@ const App: React.FC = () => {
 
     const handleColorChange = useCallback((partType: string, color: string) => {
         setAvatarConfig(prevConfig => ({
-            ...prevConfig,
-            colors: { ...prevConfig.colors, [partType]: color }
+            ...prevConfig, colors: { ...prevConfig.colors, [partType]: color }
         }));
     }, []);
 
@@ -71,14 +66,9 @@ const App: React.FC = () => {
             const link = document.createElement("a");
             link.href = URL.createObjectURL(blob);
             link.download = `avatar_config_${Date.now()}.json`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            document.body.appendChild(link); link.click(); document.body.removeChild(link);
             URL.revokeObjectURL(link.href);
-        } catch (error) {
-            console.error("Error saving avatar:", error);
-            alert("Could not save avatar config.");
-        }
+        } catch (error) { console.error("Error saving avatar:", error); alert("Could not save avatar config."); }
     }, [avatarConfig]);
 
     const handleLoadAvatar = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -89,15 +79,11 @@ const App: React.FC = () => {
                 try {
                     if (typeof e.target?.result !== 'string') throw new Error("File content not string.");
                     const loaded: AvatarConfig = JSON.parse(e.target.result);
-
                     if (loaded.gender && availablePartsData[loaded.gender] && loaded.parts && loaded.colors) {
                         const baseConfig = getDefaultConfigForGender(loaded.gender);
                         const validatedConfig: AvatarConfig = {
-                            gender: loaded.gender,
-                            parts: { ...baseConfig.parts },
-                            colors: { ...baseConfig.colors },
+                            gender: loaded.gender, parts: { ...baseConfig.parts }, colors: { ...baseConfig.colors },
                         };
-
                         for (const partKey in loaded.parts) {
                             if (validatedConfig.parts.hasOwnProperty(partKey)) {
                                 const loadedFile = loaded.parts[partKey];
@@ -105,11 +91,7 @@ const App: React.FC = () => {
                                 if (selectablePartsForGender.hasOwnProperty(partKey)) {
                                     const isValid = (selectablePartsForGender[partKey as keyof typeof selectablePartsForGender] || [])
                                         .some(p => p.fileName === loadedFile);
-                                    if (isValid || loadedFile === null) {
-                                        validatedConfig.parts[partKey] = loadedFile;
-                                    } else {
-                                        // Giữ giá trị mặc định từ baseConfig nếu không hợp lệ
-                                    }
+                                    if (isValid || loadedFile === null) validatedConfig.parts[partKey] = loadedFile;
                                 }
                             }
                         }
@@ -119,9 +101,7 @@ const App: React.FC = () => {
                             }
                         }
                         setAvatarConfig(validatedConfig);
-                    } else {
-                        alert("Invalid avatar config file structure or gender.");
-                    }
+                    } else { alert("Invalid avatar config file structure or gender."); }
                 } catch (err) {
                     console.error("Error parsing JSON:", err);
                     alert(`Invalid JSON: ${err instanceof Error ? err.message : "Unknown error"}`);
@@ -133,36 +113,60 @@ const App: React.FC = () => {
         }
     }, []);
 
-    const handleResetCamera = () => {
-        babylonSceneRef.current?.resetCamera();
-    };
+    useEffect(() => {
+        const keyMap: Record<string, keyof ActiveMovement | null> = {
+            w: 'forward', s: 'backward', a: 'left', d: 'right', q: 'turnLeft', e: 'turnRight'
+        };
+        const handleKeyAction = (event: KeyboardEvent, isActive: boolean) => {
+            const action = keyMap[event.key.toLowerCase()];
+            if (action) {
+                // Ngăn hành vi mặc định của trình duyệt cho các phím mũi tên, space, v.v. nếu chúng được dùng để di chuyển
+                if (['w', 's', 'a', 'd', 'q', 'e'].includes(event.key.toLowerCase())) {
+                    event.preventDefault();
+                }
+                setActiveMovement(prev => {
+                    if (prev[action] !== isActive) return { ...prev, [action]: isActive };
+                    return prev;
+                });
+            }
+        };
+        const onKeyDown = (e: KeyboardEvent) => handleKeyAction(e, true);
+        const onKeyUp = (e: KeyboardEvent) => handleKeyAction(e, false);
 
-    const handleToggleInspector = () => {
-        babylonSceneRef.current?.toggleInspector();
-    };
+        window.addEventListener('keydown', onKeyDown);
+        window.addEventListener('keyup', onKeyUp);
+        return () => {
+            window.removeEventListener('keydown', onKeyDown);
+            window.removeEventListener('keyup', onKeyUp);
+        };
+    }, []);
+
+    const handleResetCamera = () => babylonSceneRef.current?.resetCamera();
+    const handleToggleInspector = () => babylonSceneRef.current?.toggleInspector();
 
     return (
         <div className="App">
             <header className="App-header"><h1>Avatar Customizer</h1></header>
             <div className="main-content">
                 <div className="scene-container">
-                    <BabylonScene ref={babylonSceneRef} modelsToLoad={modelsToLoad} />
+                    <BabylonScene ref={babylonSceneRef} modelsToLoad={modelsToLoad} activeMovement={activeMovement} />
                 </div>
                 <div className="controls-container">
                     <AvatarControls
-                        currentConfig={avatarConfig}
-                        availableParts={availablePartsData}
-                        onGenderChange={handleGenderChange}
-                        onPartChange={handlePartChange}
-                        onColorChange={handleColorChange}
-                        onSaveAvatar={handleSaveAvatar}
+                        currentConfig={avatarConfig} availableParts={availablePartsData}
+                        onGenderChange={handleGenderChange} onPartChange={handlePartChange}
+                        onColorChange={handleColorChange} onSaveAvatar={handleSaveAvatar}
                         onLoadAvatar={handleLoadAvatar}
                     />
                     <div className="action-buttons" style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '15px' }}>
                         <button onClick={handleResetCamera}>Reset Camera View</button>
-                        <button onClick={handleToggleInspector} style={{marginTop: '10px'}}>
-                            Toggle Scene Explorer
-                        </button>
+                        <button onClick={handleToggleInspector} style={{ marginTop: '10px' }}>Toggle Scene Explorer</button>
+                    </div>
+                    <div className="movement-instructions" style={{ marginTop: '20px', fontSize: '0.9em', textAlign: 'left', padding: '10px', background: '#f9f9f9', borderRadius: '4px' }}>
+                        <strong>Điều khiển:</strong><br />
+                        W: Tiến, S: Lùi<br />
+                        A: Sang trái (Strafe), D: Sang phải (Strafe)<br />
+                        Q: Xoay trái, E: Xoay phải
                     </div>
                 </div>
             </div>

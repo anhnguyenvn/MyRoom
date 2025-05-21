@@ -3,10 +3,11 @@ import React, { useEffect, useRef, memo, forwardRef, useImperativeHandle, useSta
 import {
     Engine, Scene, ArcRotateCamera, HemisphericLight, Vector3, SceneLoader,
     StandardMaterial, Color3, Tools, AbstractMesh, AnimationGroup, Nullable,
-    IParticleSystem, Material, PBRMaterial, MeshBuilder,
+    IParticleSystem, Material, PBRMaterial, MeshBuilder, TransformNode, Quaternion,
+    Matrix, Scalar,
 } from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
-import '@babylonjs/inspector'; // Quan trọng: Import inspector để kích hoạt scene.debugLayer
+import '@babylonjs/inspector';
 
 export interface ModelInfo {
     type: string;
@@ -14,8 +15,18 @@ export interface ModelInfo {
     color?: string;
 }
 
+export interface ActiveMovement {
+    forward: boolean;
+    backward: boolean;
+    left: boolean;
+    right: boolean;
+    turnLeft: boolean;
+    turnRight: boolean;
+}
+
 interface BabylonSceneProps {
     modelsToLoad: ModelInfo[];
+    activeMovement: ActiveMovement;
 }
 
 interface LoadedPartEntry {
@@ -28,25 +39,35 @@ export interface BabylonSceneHandle {
     toggleInspector: () => void;
 }
 
-const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ modelsToLoad }, ref) => {
+const rotationMatrix = new Matrix(); // Khai báo ở ngoài để tái sử dụng
+
+const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ modelsToLoad, activeMovement }, ref) => {
     const reactCanvas = useRef<HTMLCanvasElement>(null);
     const engineRef = useRef<Nullable<Engine>>(null);
     const sceneRef = useRef<Nullable<Scene>>(null);
     const cameraRef = useRef<Nullable<ArcRotateCamera>>(null);
+    const avatarRootRef = useRef<Nullable<TransformNode>>(null);
     const loadedPartsRef = useRef<Record<string, LoadedPartEntry>>({});
     const [isInspectorVisible, setIsInspectorVisible] = useState(false);
 
+    const idleAnimRef = useRef<Nullable<AnimationGroup>>(null);
+    const runAnimRef = useRef<Nullable<AnimationGroup>>(null);
+    const currentAnimRef = useRef<Nullable<AnimationGroup>>(null);
+
     const defaultCameraAlpha = -Math.PI / 1.5;
     const defaultCameraBeta = Math.PI / 2.5;
-    const defaultCameraRadius = 2.5;
-    const defaultCameraTarget = new Vector3(0, 1.0, 0);
+    const defaultCameraRadius = 3.5;
+    const defaultCameraTargetOffset = new Vector3(0, 1.2, 0);
 
     const resetCameraLocal = () => {
         if (cameraRef.current) {
             cameraRef.current.alpha = defaultCameraAlpha;
             cameraRef.current.beta = defaultCameraBeta;
             cameraRef.current.radius = defaultCameraRadius;
-            cameraRef.current.setTarget(defaultCameraTarget.clone());
+            const targetPosition = avatarRootRef.current
+                ? avatarRootRef.current.absolutePosition.add(defaultCameraTargetOffset)
+                : defaultCameraTargetOffset.clone();
+            cameraRef.current.setTarget(targetPosition);
         }
     };
 
@@ -57,42 +78,25 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                 if (isInspectorVisible) {
                     sceneRef.current.debugLayer.hide();
                     setIsInspectorVisible(false);
-                    console.log("BabylonScene: Inspector hidden.");
                 } else {
-                    sceneRef.current.debugLayer.show({
-                        embedMode: true, // Cho phép nhúng tốt hơn
-                        // enableClose: true, // Nút đóng mặc định của inspector
-                        // globalRoot: document.body, // Phần tử DOM để gắn inspector vào
-                    }).then(() => {
-                        console.log("BabylonScene: Inspector shown.");
-                    }).catch(error => {
-                        console.error("BabylonScene: Error showing inspector:", error);
-                    });
+                    sceneRef.current.debugLayer.show({ embedMode: true })
+                        .then(() => {})
+                        .catch(error => console.error("Error showing inspector:", error));
                     setIsInspectorVisible(true);
                 }
-            } else {
-                console.warn("BabylonScene: Scene not available to toggle inspector.");
             }
         }
     }));
 
     const clearMeshesForType = (partType: string) => {
+        if (partType === 'body') {
+            idleAnimRef.current?.stop(); runAnimRef.current?.stop();
+            idleAnimRef.current = null; runAnimRef.current = null; currentAnimRef.current = null;
+        }
         const partEntry = loadedPartsRef.current[partType];
         if (partEntry) {
             partEntry.animationGroups?.forEach(ag => ag.dispose());
             partEntry.meshes?.forEach(mesh => {
-                if (sceneRef.current?.particleSystems) {
-                    sceneRef.current.particleSystems = sceneRef.current.particleSystems.filter(ps => {
-                        if (ps.emitter === mesh || (ps.emitter instanceof AbstractMesh && ps.emitter.parent === mesh)) {
-                            ps.dispose(); return false;
-                        }
-                        return true;
-                    });
-                }
-                if (mesh.skeleton && sceneRef.current?.debugLayer?.getSkeletonViewers) {
-                    const viewer = sceneRef.current.debugLayer.getSkeletonViewers().find(v => v.skeleton === mesh.skeleton);
-                    viewer?.dispose();
-                }
                 if (!mesh.isDisposed()) mesh.dispose(false, true);
             });
             delete loadedPartsRef.current[partType];
@@ -100,7 +104,15 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
     };
 
     const loadModel = async (partType: string, path: string, colorValue?: string) => {
-        if (!sceneRef.current) return;
+        if (!sceneRef.current || !avatarRootRef.current) {
+            console.warn("BabylonScene: loadModel - scene or avatarRoot not ready.");
+            return;
+        }
+
+        // Nếu đang tải tóc và tóc cũ (là con của một parent khác head) đã tồn tại, hoặc
+        // nếu đang tải một bộ phận khác mà nó đã tồn tại, thì xóa nó trước.
+        // Đối với tóc, việc clear có thể cần phức tạp hơn nếu parent của nó thay đổi.
+        // Cách đơn giản là luôn clear trước khi load, trừ khi chúng ta có logic phức tạp hơn để reparent.
         clearMeshesForType(partType);
 
         try {
@@ -113,24 +125,59 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                     meshes: result.meshes,
                     animationGroups: result.animationGroups || [],
                 };
+
                 result.meshes.forEach(mesh => {
+                    let designatedParent: Nullable<TransformNode> = avatarRootRef.current; // Mặc định cha là avatarRoot
+
+                    if (partType === "hair") {
+                        const headEntry = loadedPartsRef.current["head"];
+                        if (headEntry && headEntry.meshes && headEntry.meshes.length > 0) {
+                            // Gán tóc làm con của mesh đầu tiên của bộ phận đầu.
+                            // Giả định mesh đầu tiên là node chính của đầu có thể transform.
+                            // Nếu head.glb có một "attachment point" (node rỗng) riêng cho tóc, bạn nên gán vào đó.
+                            designatedParent = headEntry.meshes[0] as TransformNode; // Ép kiểu nếu chắc chắn mesh[0] có thể làm parent
+                            console.log(`BabylonScene: Parenting hair to head mesh: ${headEntry.meshes[0].name}`);
+                        } else {
+                            console.warn("BabylonScene: Head model not found or has no meshes when trying to parent hair. Defaulting hair parent to avatarRoot. Hair might appear at feet or misaligned if its origin is not set correctly for this scenario.");
+                            // Nếu không tìm thấy đầu, tóc vẫn sẽ là con của avatarRoot.
+                            // Điều này yêu cầu hair.glb phải được model với gốc tọa độ ở vị trí
+                            // tương đối chính xác so với avatarRoot (ví dụ: ở vị trí đầu).
+                        }
+                    }
+
+                    // Gán cha cho các mesh gốc của file GLB (những mesh chưa có parent)
+                    if (!mesh.parent && designatedParent) {
+                        mesh.parent = designatedParent;
+                    }
+                    // Fallback cuối cùng nếu không có designatedParent và mesh chưa có cha
+                    else if (!mesh.parent && avatarRootRef.current) {
+                        mesh.parent = avatarRootRef.current;
+                    }
+
+
+                    // Áp dụng vật liệu và màu sắc
                     if (!mesh.material && sceneRef.current) {
                         mesh.material = new StandardMaterial(`${partType}_mat_${mesh.name}`, sceneRef.current);
                     }
                     if (colorValue && mesh.material) {
                         const babylonColor = Color3.FromHexString(colorValue);
                         const material = mesh.material as Material;
-                        if (material instanceof StandardMaterial) {
-                            material.diffuseColor = babylonColor;
-                        } else if (material instanceof PBRMaterial) {
-                            material.albedoColor = babylonColor;
-                        } else if ('albedoColor' in material) {
-                             (material as any).albedoColor = babylonColor;
-                        } else if ('diffuseColor' in material) {
-                             (material as any).diffuseColor = babylonColor;
-                        }
+                        if (material instanceof StandardMaterial) material.diffuseColor = babylonColor;
+                        else if (material instanceof PBRMaterial) material.albedoColor = babylonColor;
+                        else if ('albedoColor' in material) (material as any).albedoColor = babylonColor;
+                        else if ('diffuseColor' in material) (material as any).diffuseColor = babylonColor;
                     }
                 });
+
+                if (partType === 'body' && result.animationGroups) {
+                    idleAnimRef.current = result.animationGroups.find(ag => ag.name.toLowerCase().includes("idle")) || null;
+                    runAnimRef.current = result.animationGroups.find(ag => ag.name.toLowerCase().includes("run") || ag.name.toLowerCase().includes("walk")) || null;
+                    if (idleAnimRef.current) {
+                        idleAnimRef.current.play(true); currentAnimRef.current = idleAnimRef.current;
+                    } else if (runAnimRef.current) {
+                        runAnimRef.current.play(true); currentAnimRef.current = runAnimRef.current;
+                    }
+                }
             }
         } catch (error) {
             console.error(`BabylonScene: Error loading ${partType} from ${path}:`, error);
@@ -145,37 +192,78 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
             const babylonScene = new Scene(babylonEngine);
             sceneRef.current = babylonScene;
 
-            const camera = new ArcRotateCamera(
-                "camera",
-                defaultCameraAlpha,
-                defaultCameraBeta,
-                defaultCameraRadius,
-                defaultCameraTarget.clone(),
-                babylonScene
-            );
+            avatarRootRef.current = new TransformNode("avatarRoot", babylonScene);
+            avatarRootRef.current.rotationQuaternion = Quaternion.Identity();
+
+            const cameraTargetNode = new TransformNode("cameraTarget", babylonScene);
+            cameraTargetNode.parent = avatarRootRef.current;
+            cameraTargetNode.position.copyFrom(defaultCameraTargetOffset);
+
+            const camera = new ArcRotateCamera("camera", defaultCameraAlpha, defaultCameraBeta, defaultCameraRadius, cameraTargetNode, babylonScene);
             camera.attachControl(reactCanvas.current, false);
-            camera.lowerRadiusLimit = 0.5;
-            camera.upperRadiusLimit = 10;
-            camera.wheelDeltaPercentage = 0.01;
-            camera.minZ = 0.1;
-            camera.lowerBetaLimit = Math.PI * 0.1;
-            camera.upperBetaLimit = Math.PI * 0.9;
-            camera.panningSensibility = 1000;
-            camera.panningDistanceLimit = camera.radius * 2; // Giới hạn dựa trên zoom hiện tại
-            camera.panningInertia = 0.85;
+            camera.lowerRadiusLimit = 0.5; camera.upperRadiusLimit = 10;
+            camera.wheelDeltaPercentage = 0.01; camera.minZ = 0.1;
+            camera.lowerBetaLimit = Math.PI * 0.1; camera.upperBetaLimit = Math.PI * 0.9;
+            camera.panningSensibility = 0;
+            camera.allowUpsideDown = false;
             camera.inertia = 0.85;
             cameraRef.current = camera;
 
-            const light1 = new HemisphericLight("light1", new Vector3(0.8, 1, 0.5), babylonScene);
-            light1.intensity = 0.9;
-            const light2 = new HemisphericLight("light2", new Vector3(-0.8, 0.5, -0.5), babylonScene);
-            light2.intensity = 0.4;
+            const light1 = new HemisphericLight("light1", new Vector3(0.8, 1, 0.5), babylonScene); light1.intensity = 0.9;
+            const light2 = new HemisphericLight("light2", new Vector3(-0.8, 0.5, -0.5), babylonScene); light2.intensity = 0.4;
 
-            const ground = MeshBuilder.CreateGround("ground", { width: 10, height: 10 }, babylonScene);
-            const groundMaterial = new StandardMaterial("groundMaterial", babylonScene);
-            groundMaterial.diffuseColor = new Color3(0.6, 0.6, 0.6);
-            groundMaterial.specularColor = new Color3(0.1, 0.1, 0.1);
+            const ground = MeshBuilder.CreateGround("ground", { width: 20, height: 20 }, babylonScene);
+            const groundMaterial = new StandardMaterial("groundMat", babylonScene);
+            groundMaterial.diffuseColor = new Color3(0.5, 0.55, 0.5); groundMaterial.specularColor = Color3.Black();
             ground.material = groundMaterial;
+
+            const movementSpeed = 1.8;
+            const rotationSpeed = 2.5;
+
+            const sceneObserver = babylonScene.onBeforeRenderObservable.add(() => {
+                if (!avatarRootRef.current || !engineRef.current) return;
+                const deltaTime = engineRef.current.getDeltaTime() / 1000.0;
+                let isMoving = false;
+                const moveDirection = Vector3.Zero();
+                if (avatarRootRef.current.rotationQuaternion) {
+                    avatarRootRef.current.rotationQuaternion.toRotationMatrix(rotationMatrix);
+                }
+                const forwardLocal = Vector3.Forward(); // (0,0,1)
+                const rightLocal = Vector3.Right(); // (1,0,0)
+                
+                const worldForward = Vector3.TransformCoordinates(forwardLocal, rotationMatrix);
+                const worldRight = Vector3.TransformCoordinates(rightLocal, rotationMatrix);
+
+
+                if (activeMovement.forward) { moveDirection.addInPlace(worldForward); isMoving = true; }
+                if (activeMovement.backward) { moveDirection.subtractInPlace(worldForward); isMoving = true; }
+                if (activeMovement.right) { moveDirection.addInPlace(worldRight); isMoving = true; }
+                if (activeMovement.left) { moveDirection.subtractInPlace(worldRight); isMoving = true; }
+
+                if (isMoving && moveDirection.lengthSquared() > 0.001) { // Thêm ngưỡng nhỏ để tránh di chuyển khi không cần
+                    moveDirection.normalize().scaleInPlace(movementSpeed * deltaTime);
+                    avatarRootRef.current.position.addInPlace(moveDirection);
+                }
+                let rotationAmount = 0;
+                if (activeMovement.turnLeft) { rotationAmount = -rotationSpeed * deltaTime; isMoving = true;}
+                if (activeMovement.turnRight) { rotationAmount = rotationSpeed * deltaTime; isMoving = true;}
+                if (rotationAmount !== 0 && avatarRootRef.current.rotationQuaternion) {
+                    const rotationDelta = Quaternion.RotationAxis(Vector3.UpReadOnly, rotationAmount);
+                    avatarRootRef.current.rotationQuaternion.multiplyToRef(rotationDelta, avatarRootRef.current.rotationQuaternion);
+                }
+
+                if (isMoving) {
+                    if (currentAnimRef.current !== runAnimRef.current && runAnimRef.current) {
+                        idleAnimRef.current?.stop(); runAnimRef.current.play(true); currentAnimRef.current = runAnimRef.current;
+                    }
+                } else {
+                    if (currentAnimRef.current !== idleAnimRef.current && idleAnimRef.current) {
+                        runAnimRef.current?.stop(); idleAnimRef.current.play(true); currentAnimRef.current = idleAnimRef.current;
+                    } else if (!idleAnimRef.current && currentAnimRef.current !== null) {
+                        currentAnimRef.current?.stop(); currentAnimRef.current = null;
+                    }
+                }
+            });
 
             babylonEngine.runRenderLoop(() => sceneRef.current?.render());
             const resize = () => babylonEngine.resize();
@@ -183,33 +271,25 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
 
             return () => {
                 window.removeEventListener('resize', resize);
-                if (sceneRef.current && isInspectorVisible) {
-                    sceneRef.current.debugLayer.hide();
-                }
-                if (sceneRef.current) {
-                    Object.keys(loadedPartsRef.current).forEach(clearMeshesForType);
-                    sceneRef.current.dispose();
-                }
-                engineRef.current?.dispose();
-                sceneRef.current = null;
-                engineRef.current = null;
-                cameraRef.current = null;
+                babylonScene.onBeforeRenderObservable.remove(sceneObserver);
+                if (sceneRef.current && isInspectorVisible) sceneRef.current.debugLayer.hide();
+                avatarRootRef.current?.dispose(false, true); avatarRootRef.current = null;
                 loadedPartsRef.current = {};
+                sceneRef.current?.dispose(); engineRef.current?.dispose();
+                sceneRef.current = null; engineRef.current = null; cameraRef.current = null;
+                idleAnimRef.current = null; runAnimRef.current = null; currentAnimRef.current = null;
             };
         }
-    }, []); // Mảng dependency rỗng đảm bảo chỉ chạy một lần
+    }, []);
 
     useEffect(() => {
-        if (!sceneRef.current || !engineRef.current) return;
+        if (!sceneRef.current || !engineRef.current || !avatarRootRef.current) return;
         const typesInProps = new Set(modelsToLoad.map(m => m.type));
-
         Object.keys(loadedPartsRef.current).forEach(loadedType => {
             if (!typesInProps.has(loadedType)) clearMeshesForType(loadedType);
         });
-
         const loadPromises = modelsToLoad.map(async ({ type, path, color }) => {
-            if (path) await loadModel(type, path, color);
-            else clearMeshesForType(type);
+            if (path) await loadModel(type, path, color); else clearMeshesForType(type);
         });
         Promise.all(loadPromises).catch(err => console.error("BabylonScene: Error updating models:", err));
     }, [modelsToLoad]);
