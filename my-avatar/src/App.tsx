@@ -35,20 +35,62 @@ const App: React.FC = () => {
 
     const handleGenderChange = useCallback((newGender: Gender) => {
         if (availablePartsData[newGender]) {
+            // Dispose tất cả các part hiện tại trước khi load gender mới
+            const currentConfig = avatarConfig;
+            const currentGenderData = availablePartsData[currentConfig.gender];
+            
+            // Dispose tất cả các selectable parts
+            for (const partType in currentGenderData.selectableParts) {
+                if (currentConfig.parts[partType]) {
+                    // Gọi dispose thông qua BabylonScene ref
+                    babylonSceneRef.current?.disposePart?.(partType);
+                }
+            }
+
+            // Dispose các fixed parts
+            for (const partType in currentGenderData.fixedParts) {
+                if (currentConfig.parts[partType]) {
+                    babylonSceneRef.current?.disposePart?.(partType);
+                }
+            }
+
+            // Load cấu hình mới cho gender mới
             setAvatarConfig(getDefaultConfigForGender(newGender));
         }
-    }, []);
+    }, [avatarConfig]);
 
     const handlePartChange = useCallback((partType: string, fileName: string | null) => {
         setAvatarConfig(prevConfig => {
-            const newParts: AvatarPartPaths = { ...prevConfig.parts, [partType]: fileName };
+            const newParts: AvatarPartPaths = { ...prevConfig.parts };
             const newColors: AvatarColors = { ...prevConfig.colors };
+
+            // Nếu đang chọn fullset, set các part liên quan về null
+            if (partType === 'fullset') {
+                newParts.top = null;
+                newParts.bottom = null;
+                newParts.shoes = null;
+                // Xóa màu của các part đã bị disable
+                delete newColors.top;
+                delete newColors.bottom;
+                delete newColors.shoes;
+            }
+            // Nếu đang chọn một clothing part và đang có fullset, set fullset về null
+            else if (['top', 'bottom', 'shoes'].includes(partType) && newParts.fullset) {
+                newParts.fullset = null;
+                delete newColors.fullset;
+            }
+
+            // Cập nhật part được chọn
+            newParts[partType] = fileName;
+
+            // Xử lý màu sắc
             const defaultColorForPart = availablePartsData[prevConfig.gender]?.defaultColors?.[partType];
             if (fileName !== null && !newColors[partType]) {
                 newColors[partType] = defaultColorForPart || '#FFFFFF';
             } else if (fileName === null) {
                 delete newColors[partType];
             }
+
             return { ...prevConfig, parts: newParts, colors: newColors };
         });
     }, []);

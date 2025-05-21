@@ -152,7 +152,7 @@ export const availablePartsData: AvailableParts = {
 
 export interface AvatarPartPaths {
   body: string;
-  head: string;
+  // head: string;
   hair: string | null;
   top: string | null;
   bottom?: string | null;
@@ -189,25 +189,25 @@ export const getDefaultConfigForGender = (gender: Gender): AvatarConfig => {
 
   const initialParts: AvatarPartPaths = {
     body: genderData.fixedParts.body,
-    head: genderData.fixedParts.head,
+    // head: genderData.fixedParts.head,
     hair: null,
     top: null,
     bottom: null,
     shoes: null,
+    fullset: null,
     accessory: null,
   };
   const initialColors: AvatarColors = { ...genderData.defaultColors };
 
   for (const partType in genderData.selectableParts) {
-    const items =
-      genderData.selectableParts[partType as keyof GenderSelectableParts];
-    if (items && items.length > 0) {
-      const firstActualItem = items.find((item) => item.fileName !== null);
-      initialParts[partType] = firstActualItem
-        ? firstActualItem.fileName
-        : null;
-    } else {
-      initialParts[partType] = null;
+    if (partType !== 'fullset' && partType !== 'accessory') {
+      const items = genderData.selectableParts[partType as keyof GenderSelectableParts];
+      if (items && items.length > 0) {
+        const firstActualItem = items.find((item) => item.fileName !== null);
+        initialParts[partType] = firstActualItem ? firstActualItem.fileName : null;
+      } else {
+        initialParts[partType] = null;
+      }
     }
   }
 

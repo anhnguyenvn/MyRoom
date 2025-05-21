@@ -37,6 +37,7 @@ interface LoadedPartEntry {
 export interface BabylonSceneHandle {
     resetCamera: () => void;
     toggleInspector: () => void;
+    disposePart: (partType: string) => void;
 }
 
 const rotationMatrix = new Matrix(); // Khai báo ở ngoài để tái sử dụng
@@ -85,6 +86,10 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                     setIsInspectorVisible(true);
                 }
             }
+        },
+        disposePart: (partType: string) => {
+            console.log(`Disposing part from handle: ${partType}`);
+            disposePartType(partType);
         }
     }));
 
@@ -103,17 +108,54 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
         }
     };
 
+    // Thêm các hàm tiện ích mới
+    const disposePartType = (partType: string) => {
+        console.log(`Disposing part type: ${partType}`);
+        clearMeshesForType(partType);
+    };
+
+    const disposeFullsetRelatedParts = () => {
+        console.log('Disposing fullset related parts');
+        disposePartType('top');
+        disposePartType('bottom');
+        disposePartType('shoes');
+    };
+
+    const isFullset = (partType: string) => partType === 'fullset';
+    const isClothingPart = (partType: string) => ['top', 'bottom', 'shoes'].includes(partType);
+
     const loadModel = async (partType: string, path: string, colorValue?: string) => {
         if (!sceneRef.current || !avatarRootRef.current) {
             console.warn("BabylonScene: loadModel - scene or avatarRoot not ready.");
             return;
         }
 
-        // Nếu đang tải tóc và tóc cũ (là con của một parent khác head) đã tồn tại, hoặc
-        // nếu đang tải một bộ phận khác mà nó đã tồn tại, thì xóa nó trước.
-        // Đối với tóc, việc clear có thể cần phức tạp hơn nếu parent của nó thay đổi.
-        // Cách đơn giản là luôn clear trước khi load, trừ khi chúng ta có logic phức tạp hơn để reparent.
-        clearMeshesForType(partType);
+        // Kiểm tra và xử lý các trường hợp đặc biệt
+        const currentPartEntry = loadedPartsRef.current[partType];
+        const isCurrentPartFullset = currentPartEntry && isFullset(partType);
+        const isNewPartFullset = isFullset(partType);
+        const isNewPartClothing = isClothingPart(partType);
+
+        // 1. Dispose part cùng loại
+        disposePartType(partType);
+
+        // 2. Nếu part mới là fullset, dispose các part liên quan
+        if (isNewPartFullset) {
+            console.log('Loading fullset, disposing related parts');
+            disposeFullsetRelatedParts();
+        }
+
+        // 3. Nếu part cũ là fullset và part mới là clothing part, dispose fullset
+        if (isCurrentPartFullset && isNewPartClothing) {
+            console.log('Loading clothing part, disposing current fullset');
+            disposePartType('fullset');
+        }
+
+        // 4. Nếu đang load một clothing part và có fullset đang active, dispose fullset
+        if (isNewPartClothing && loadedPartsRef.current['fullset']) {
+            console.log('Loading clothing part while fullset is active, disposing fullset');
+            disposePartType('fullset');
+        }
 
         try {
             const result = await SceneLoader.ImportMeshAsync(
