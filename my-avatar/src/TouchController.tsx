@@ -55,48 +55,65 @@ const TouchController: React.FC<TouchControllerProps> = ({
   const maxDistance = joystickRadius - knobRadius;
 
   const updateMovement = useCallback((currentX: number, currentY: number, centerX: number, centerY: number) => {
-    // Tính toán delta từ vị trí bắt đầu (center của joystick)
+    // Tính toán vector di chuyển từ trung tâm joystick đến vị trí touch
     const deltaX = currentX - centerX;
     const deltaY = currentY - centerY;
     
-    console.log('Movement calculation:', { deltaX, deltaY });
-    
-    // Tính toán khoảng cách từ điểm hiện tại đến trung tâm
+    // Tính toán khoảng cách từ trung tâm
     const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
     
-    // Giới hạn khoảng cách tối đa (bán kính của joystick)
-    const maxRadius = 50;
-    const clampedDistance = Math.min(distance, maxRadius);
+    // Giới hạn khoảng cách tối đa (bán kính joystick)
+    const joystickRadius = 50; // Bán kính của joystick
+    const clampedDistance = Math.min(distance, joystickRadius);
     
-    // Luôn xử lý di chuyển, ngay cả khi rất nhỏ
-    // Chuẩn hóa vector chuyển động
-    // Nếu khoảng cách quá nhỏ, sử dụng giá trị mặc định để tránh chia cho 0
-    const normalizedX = distance > 0.0001 ? deltaX / distance : 0;
-    const normalizedY = distance > 0.0001 ? deltaY / distance : 0;
+    // Tính toán hướng di chuyển đã chuẩn hóa
+    let normalizedX = 0;
+    let normalizedY = 0;
     
-    // Tính toán cường độ di chuyển dựa trên khoảng cách (0-1)
-    const normalizedDistance = clampedDistance / maxRadius;
+    if (distance > 0) {
+      normalizedX = deltaX / distance;
+      normalizedY = deltaY / distance;
+    }
     
-    // Giảm deadzone để tăng độ nhạy
-    const deadZone = 0.0001;
-    const intensity = normalizedDistance < deadZone ? 0 : normalizedDistance;
-    
-    // Đảo ngược trục Y vì trong game, hướng lên thường là giá trị âm
-    const movementData = {
-      x: normalizedX * intensity,
-      y: -normalizedY * intensity, // Đảo ngược trục Y
-      isMoving: intensity > 0
-    };
-    
-    console.log('Movement data:', movementData);
+    // Áp dụng khoảng cách đã giới hạn để có được vector di chuyển cuối cùng
+    const movementX = normalizedX * clampedDistance / joystickRadius;
+    const movementY = normalizedY * clampedDistance / joystickRadius;
     
     // Cập nhật vị trí joystick
-    const joystickX = normalizedX * clampedDistance;
-    const joystickY = normalizedY * clampedDistance;
-    setJoystickPosition({ x: joystickX, y: joystickY });
+    setJoystickPosition({
+      x: movementX * joystickRadius,
+      y: movementY * joystickRadius
+    });
     
-    // Gửi dữ liệu di chuyển
-    onMovementChange(movementData);
+    // Xử lý dead zone (vùng không phản ứng ở giữa joystick)
+    const deadZone = 0.1; // 10% của bán kính
+    const normalizedDistance = clampedDistance / joystickRadius;
+    
+    let finalMovementX = 0;
+    let finalMovementY = 0;
+    let isMoving = false;
+    
+    if (normalizedDistance > deadZone) {
+      // Tính toán giá trị di chuyển sau khi áp dụng dead zone
+      const movementScale = (normalizedDistance - deadZone) / (1 - deadZone);
+      finalMovementX = movementX * movementScale;
+      finalMovementY = movementY * movementScale;
+      isMoving = true;
+    }
+    
+    // Chỉ ghi log và gửi dữ liệu khi có chuyển động thực sự
+    if (isMoving || Math.abs(finalMovementX) > 0.001 || Math.abs(finalMovementY) > 0.001) {
+      console.log('Movement calculated:', { 
+        x: finalMovementX, 
+        y: finalMovementY, 
+        isMoving: isMoving,
+        distance: normalizedDistance,
+        deadZone: deadZone
+      });
+      
+      // Gửi dữ liệu di chuyển đến component cha
+      onMovementChange({ x: finalMovementX, y: -finalMovementY, isMoving: isMoving });
+    }
   }, [onMovementChange]);
 
   // Thêm state để theo dõi mouse down
@@ -300,16 +317,17 @@ const TouchController: React.FC<TouchControllerProps> = ({
 
   const handleMouseUp = useCallback(() => {
     if (isMouseDown) {
+      // Chỉ ghi log khi thực sự kết thúc chuyển động
       console.log('Mouse up detected - resetting movement state');
+      
       setIsMouseDown(false);
       setIsActive(false);
       setMovementTouch(null);
       setJoystickPosition({ x: 0, y: 0 });
       
       // Đảm bảo gửi trạng thái isMoving = false khi thả chuột
-      const resetMovementData = { x: 0, y: 0, isMoving: false };
-      console.log('Resetting movement data:', resetMovementData);
-      onMovementChange(resetMovementData);
+      // Chỉ gửi một lần khi kết thúc chuyển động
+      onMovementChange({ x: 0, y: 0, isMoving: false });
     }
   }, [isMouseDown, onMovementChange]);
 
@@ -413,13 +431,7 @@ const TouchController: React.FC<TouchControllerProps> = ({
   const handleTouchEnd = useCallback((e: TouchEvent) => {
     e.preventDefault();
     
-    console.log('Touch end event received', { 
-      touches: e.touches.length, 
-      changedTouches: e.changedTouches.length 
-    });
-    
     if (e.changedTouches.length === 0) {
-      console.warn('No changed touches in touch end event');
       return;
     }
     
@@ -427,44 +439,35 @@ const TouchController: React.FC<TouchControllerProps> = ({
     let rotationTouchEnded = false;
     
     Array.from(e.changedTouches).forEach(touch => {
-      console.log('Processing ended touch:', { 
-        identifier: touch.identifier,
-        movementTouchId: movementTouch?.identifier,
-        rotationTouchId: rotationTouch?.identifier
-      });
-      
       if (movementTouch && touch.identifier === movementTouch.identifier) {
-        console.log('Movement touch ended');
         movementTouchEnded = true;
       } else if (rotationTouch && touch.identifier === rotationTouch.identifier) {
-        console.log('Rotation touch ended');
         rotationTouchEnded = true;
       }
     });
     
     // Xử lý kết thúc touch di chuyển
     if (movementTouchEnded) {
-      console.log('Touch end for movement control - resetting movement state');
+      // Chỉ ghi log khi thực sự kết thúc chuyển động
+      console.log('Movement touch ended - resetting movement state');
+      
       setMovementTouch(null);
       setIsActive(false);
       setJoystickPosition({ x: 0, y: 0 });
       
       // Gửi dữ liệu di chuyển với isMoving = false để dừng avatar
-      const resetMovementData = { x: 0, y: 0, isMoving: false };
-      console.log('Resetting movement data:', resetMovementData);
-      onMovementChange(resetMovementData);
+      // Chỉ gửi một lần khi kết thúc chuyển động
+      onMovementChange({ x: 0, y: 0, isMoving: false });
     }
     
     // Xử lý kết thúc touch xoay
     if (rotationTouchEnded) {
-      console.log('Touch end for rotation control - resetting rotation state');
       setRotationTouch(null);
       onRotationChange(0);
     }
     
     // Nếu không còn touch nào, đặt lại tất cả trạng thái
     if (e.touches.length === 0) {
-      console.log('No touches remaining, resetting all states');
       if (!movementTouchEnded && movementTouch) {
         setMovementTouch(null);
         setIsActive(false);

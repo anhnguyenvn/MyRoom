@@ -327,32 +327,22 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
 
                 // Xử lý di chuyển từ touch
                 if (touchMovement) {
-                    console.log('Touch movement data received:', touchMovement);
-                    
                     // Kiểm tra xem có dữ liệu di chuyển không, bất kể isMoving
                     const hasTouchMovement = Math.abs(touchMovement.x) > 0.001 || Math.abs(touchMovement.y) > 0.001;
                     
                     if (hasTouchMovement || touchMovement.isMoving) {
-                        console.log('Touch movement detected, calculating direction');
+                        // Chỉ ghi log khi có chuyển động thực sự
+                        console.log('Touch movement detected:', touchMovement);
+                        
                         const touchMoveDirection = Vector3.Zero();
                         
                         // Đảo ngược y để phù hợp với hướng di chuyển
                         touchMoveDirection.addInPlace(cameraDirection.scale(-touchMovement.y));
                         touchMoveDirection.addInPlace(cameraRight.scale(touchMovement.x));
                         
-                        console.log('Touch direction calculated:', {
-                            x: touchMovement.x,
-                            y: touchMovement.y,
-                            directionLength: touchMoveDirection.length(),
-                            isMoving: touchMovement.isMoving
-                        });
-                        
                         // Luôn xử lý chuyển động nếu có dữ liệu
                         moveDirection.addInPlace(touchMoveDirection);
                         isMoving = true;
-                        console.log('Avatar moving with touch:', moveDirection);
-                    } else {
-                        console.log('No touch movement detected');
                     }
                 }
 
