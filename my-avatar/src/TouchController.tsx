@@ -35,29 +35,36 @@ const TouchController: React.FC<TouchControllerProps> = ({
   const maxDistance = joystickRadius - knobRadius;
 
   const updateMovement = useCallback((deltaX: number, deltaY: number) => {
-    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-    const clampedDistance = Math.min(distance, maxDistance);
+    console.log('updateMovement called with:', { deltaX, deltaY });
+    const clampedDistance = Math.min(Math.sqrt(deltaX * deltaX + deltaY * deltaY), maxDistance);
     
-    if (distance > 0) {
-      const normalizedX = (deltaX / distance) * clampedDistance;
-      const normalizedY = (deltaY / distance) * clampedDistance;
+    if (clampedDistance > 0) {
+      const angle = Math.atan2(deltaY, deltaX);
+      const clampedX = Math.cos(angle) * clampedDistance;
+      const clampedY = Math.sin(angle) * clampedDistance;
       
-      setJoystickPosition({ x: normalizedX, y: normalizedY });
+      setJoystickPosition({ x: clampedX, y: clampedY });
       
       // Normalize movement values to -1 to 1 range
-      const movementX = normalizedX / maxDistance;
-      const movementY = -normalizedY / maxDistance; // Invert Y for game coordinates
+      const movementX = clampedX / maxDistance;
+      const movementY = clampedY / maxDistance;
       
-      onMovementChange({
+      const movementData = {
         x: movementX,
         y: movementY,
         isMoving: clampedDistance > 5 // Dead zone
-      });
+      };
+      
+      console.log('Sending movement data:', movementData);
+      onMovementChange(movementData);
     } else {
       setJoystickPosition({ x: 0, y: 0 });
       onMovementChange({ x: 0, y: 0, isMoving: false });
     }
   }, [maxDistance, onMovementChange]);
+
+  // Thêm state để theo dõi mouse down
+  const [isMouseDown, setIsMouseDown] = useState(false);
 
   const handleTouchStart = useCallback((e: TouchEvent) => {
     e.preventDefault();
@@ -104,6 +111,72 @@ const TouchController: React.FC<TouchControllerProps> = ({
       }
     });
   }, [movementTouch, rotationTouch, updateMovement]);
+
+  // Thêm mouse handlers
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    console.log('Mouse down on joystick!');
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (!joystickRef.current) return;
+    
+    const joystickRect = joystickRef.current.getBoundingClientRect();
+    const joystickCenterX = joystickRect.left + joystickRect.width / 2;
+    const joystickCenterY = joystickRect.top + joystickRect.height / 2;
+    
+    console.log('Mouse position:', { x: e.clientX, y: e.clientY });
+    console.log('Joystick center:', { x: joystickCenterX, y: joystickCenterY });
+    
+    const distanceToJoystick = Math.sqrt(
+      Math.pow(e.clientX - joystickCenterX, 2) + Math.pow(e.clientY - joystickCenterY, 2)
+    );
+    
+    console.log('Distance to joystick:', distanceToJoystick, 'Radius:', joystickRadius);
+    
+    if (distanceToJoystick <= joystickRadius) {
+      console.log('Mouse down accepted!');
+      setIsMouseDown(true);
+      setIsActive(true);
+      
+      // Simulate touch data with mouse
+      setMovementTouch({
+        identifier: -1, // Use -1 for mouse
+        startX: joystickCenterX,
+        startY: joystickCenterY,
+        currentX: e.clientX,
+        currentY: e.clientY
+      });
+      
+      const deltaX = e.clientX - joystickCenterX;
+      const deltaY = e.clientY - joystickCenterY;
+      console.log('Initial delta:', { deltaX, deltaY });
+      updateMovement(deltaX, deltaY);
+    }
+  }, [updateMovement]);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isMouseDown || !movementTouch) return;
+    
+    const deltaX = e.clientX - movementTouch.startX;
+    const deltaY = e.clientY - movementTouch.startY;
+    updateMovement(deltaX, deltaY);
+    
+    setMovementTouch(prev => prev ? {
+      ...prev,
+      currentX: e.clientX,
+      currentY: e.clientY
+    } : null);
+  }, [isMouseDown, movementTouch, updateMovement]);
+
+  const handleMouseUp = useCallback(() => {
+    if (isMouseDown) {
+      setIsMouseDown(false);
+      setIsActive(false);
+      setMovementTouch(null);
+      setJoystickPosition({ x: 0, y: 0 });
+      onMovementChange({ x: 0, y: 0, isMoving: false });
+    }
+  }, [isMouseDown, onMovementChange]);
 
   const handleTouchMove = useCallback((e: TouchEvent) => {
     e.preventDefault();
@@ -167,13 +240,33 @@ const TouchController: React.FC<TouchControllerProps> = ({
     };
   }, [handleTouchStart, handleTouchMove, handleTouchEnd]);
 
-  if (!isVisible) return null;
+  // Mouse event listeners
+  useEffect(() => {
+    if (!isMouseDown) return;
 
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isMouseDown, handleMouseMove, handleMouseUp]);
+
+  console.log('TouchController render - isVisible:', isVisible);
+  
+  if (!isVisible) {
+    console.log('TouchController not visible, returning null');
+    return null;
+  }
+
+  console.log('TouchController rendering...');
   return (
     <div ref={containerRef} className="touch-controller">
       <div 
         ref={joystickRef}
         className={`joystick ${isActive ? 'active' : ''}`}
+        onMouseDown={handleMouseDown}
       >
         <div 
           ref={knobRef}

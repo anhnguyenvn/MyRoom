@@ -19,7 +19,7 @@ const App: React.FC = () => {
     const [touchMovement, setTouchMovement] = useState<TouchMovement>({ x: 0, y: 0, isMoving: false });
     const [touchRotation, setTouchRotation] = useState<TouchRotation>({ delta: 0 });
     const [isMobile, setIsMobile] = useState(false);
-    const [showTouchControls, setShowTouchControls] = useState(false);
+    const [showTouchControls, setShowTouchControls] = useState(true); // Default to true for testing
     const [modelsToLoad, setModelsToLoad] = useState<ModelInfo[]>([]);
 
     const computedModelsToLoad: ModelInfo[] = useMemo(() => {
@@ -63,6 +63,7 @@ const App: React.FC = () => {
 
     // Handle touch movement
     const handleTouchMovement = useCallback((movement: TouchMovement) => {
+        console.log('handleTouchMovement called:', movement);
         setTouchMovement(movement);
     }, []);
 
@@ -346,11 +347,12 @@ const App: React.FC = () => {
                     <div className="action-buttons" style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '15px' }}>
                         <button onClick={handleResetCamera}>Reset Camera View</button>
                         <button onClick={handleToggleInspector} style={{ marginTop: '10px' }}>Toggle Scene Explorer</button>
-                        {isMobile && (
-                            <button onClick={handleToggleTouchControls} style={{ marginTop: '10px' }}>
-                                {showTouchControls ? 'Hide' : 'Show'} Touch Controls
-                            </button>
-                        )}
+                        <button 
+                            onClick={handleToggleTouchControls}
+                            style={{ marginLeft: '10px', padding: '5px 10px', fontSize: '12px' }}
+                        >
+                            {showTouchControls ? 'Hide' : 'Show'} Touch Controls
+                        </button>
                     </div>
                     <div className="movement-instructions" style={{ marginTop: '20px', fontSize: '0.9em', textAlign: 'left', padding: '10px', background: '#f9f9f9', borderRadius: '4px' }}>
                         <strong>Điều khiển:</strong><br />

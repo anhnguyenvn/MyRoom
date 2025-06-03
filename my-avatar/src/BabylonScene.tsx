@@ -327,13 +327,16 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
 
                 // Xử lý di chuyển từ touch
                 if (touchMovement && touchMovement.isMoving) {
+                    console.log('Touch movement:', touchMovement);
                     const touchMoveDirection = Vector3.Zero();
-                    touchMoveDirection.addInPlace(cameraDirection.scale(touchMovement.y));
+                    // Đảo ngược y để phù hợp với hướng di chuyển
+                    touchMoveDirection.addInPlace(cameraDirection.scale(-touchMovement.y));
                     touchMoveDirection.addInPlace(cameraRight.scale(touchMovement.x));
                     
                     if (touchMoveDirection.lengthSquared() > 0.001) {
                         moveDirection.addInPlace(touchMoveDirection);
                         isMoving = true;
+                        console.log('Avatar moving with touch:', moveDirection);
                     }
                 }
 
@@ -487,21 +490,6 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
             ref={reactCanvas} 
             style={{ width: '100%', height: '100%', touchAction: 'none', outline: 'none' }}
             tabIndex={0}
-            onFocus={(e) => {
-                e.target.style.outline = 'none';
-                console.log('Canvas focused');
-            }}
-            onBlur={(e) => {
-                console.log('Canvas blurred');
-            }}
-            onKeyDown={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-            }}
-            onKeyUp={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-            }}
         />
     );
 });
