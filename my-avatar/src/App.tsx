@@ -19,7 +19,7 @@ const App: React.FC = () => {
     const [touchMovement, setTouchMovement] = useState<TouchMovement>({ x: 0, y: 0, isMoving: false });
     const [touchRotation, setTouchRotation] = useState<TouchRotation>({ delta: 0 });
     const [isMobile, setIsMobile] = useState(false);
-    const [showTouchControls, setShowTouchControls] = useState(true); // Default to true for testing
+    const [showTouchControls, setShowTouchControls] = useState(true); // Luôn hiển thị touch controls
     const [modelsToLoad, setModelsToLoad] = useState<ModelInfo[]>([]);
 
     const computedModelsToLoad: ModelInfo[] = useMemo(() => {
@@ -53,7 +53,8 @@ const App: React.FC = () => {
             const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
                                  (window.innerWidth <= 768 && 'ontouchstart' in window);
             setIsMobile(isMobileDevice);
-            setShowTouchControls(isMobileDevice);
+            // Luôn hiển thị touch controls bất kể thiết bị
+            setShowTouchControls(true);
         };
         
         checkMobile();
@@ -63,7 +64,20 @@ const App: React.FC = () => {
 
     // Handle touch movement
     const handleTouchMovement = useCallback((movement: TouchMovement) => {
-        console.log('handleTouchMovement called:', movement);
+        console.log('handleTouchMovement called with data:', movement);
+        
+        // Kiểm tra dữ liệu di chuyển
+        if (movement.isMoving) {
+            console.log('Movement is active, updating state with:', {
+                x: movement.x,
+                y: movement.y,
+                isMoving: movement.isMoving
+            });
+        } else {
+            console.log('Movement is not active, resetting state');
+        }
+        
+        // Cập nhật state với dữ liệu di chuyển mới
         setTouchMovement(movement);
     }, []);
 
@@ -72,6 +86,25 @@ const App: React.FC = () => {
         setTouchRotation({ delta: rotationDelta });
         // Reset rotation delta after a short time
         setTimeout(() => setTouchRotation({ delta: 0 }), 50);
+    }, []);
+    
+    // Handle touch action (jump, run, wave, dance)
+    const handleTouchAction = useCallback((action: { jump?: boolean; run?: boolean; wave?: boolean; dance?: boolean }) => {
+        setActiveMovement(prev => ({
+            ...prev,
+            jump: action.jump !== undefined ? action.jump : prev.jump,
+            run: action.run !== undefined ? action.run : prev.run,
+            wave: action.wave !== undefined ? action.wave : prev.wave,
+            dance: action.dance !== undefined ? action.dance : prev.dance
+        }));
+        
+        // Auto-reset wave and dance after a short delay
+        if (action.wave === true) {
+            setTimeout(() => setActiveMovement(prev => ({ ...prev, wave: false })), 2000);
+        }
+        if (action.dance === true) {
+            setTimeout(() => setActiveMovement(prev => ({ ...prev, dance: false })), 5000);
+        }
     }, []);
 
     const handleGenderChange = useCallback((newGender: Gender) => {
@@ -332,6 +365,8 @@ const App: React.FC = () => {
                         onMovementChange={handleTouchMovement}
                         onRotationChange={handleTouchRotation}
                         isVisible={showTouchControls}
+                        activeMovement={activeMovement}
+                        onActionChange={handleTouchAction}
                     />
                 </div>
                 <div className="controls-container">
@@ -349,9 +384,20 @@ const App: React.FC = () => {
                         <button onClick={handleToggleInspector} style={{ marginTop: '10px' }}>Toggle Scene Explorer</button>
                         <button 
                             onClick={handleToggleTouchControls}
-                            style={{ marginLeft: '10px', padding: '5px 10px', fontSize: '12px' }}
+                            style={{ 
+                                marginLeft: '10px', 
+                                padding: '8px 15px', 
+                                fontSize: '14px',
+                                backgroundColor: showTouchControls ? '#4CAF50' : '#f44336',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                transition: 'all 0.3s ease'
+                            }}
                         >
-                            {showTouchControls ? 'Hide' : 'Show'} Touch Controls
+                            {showTouchControls ? 'Ẩn' : 'Hiện'} Touch Controls
                         </button>
                     </div>
                     <div className="movement-instructions" style={{ marginTop: '20px', fontSize: '0.9em', textAlign: 'left', padding: '10px', background: '#f9f9f9', borderRadius: '4px' }}>

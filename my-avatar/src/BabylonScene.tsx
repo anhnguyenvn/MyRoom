@@ -326,17 +326,34 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                 if (activeMovement.left) { moveDirection.subtractInPlace(cameraRight); isMoving = true; }
 
                 // Xử lý di chuyển từ touch
-                if (touchMovement && touchMovement.isMoving) {
-                    console.log('Touch movement:', touchMovement);
-                    const touchMoveDirection = Vector3.Zero();
-                    // Đảo ngược y để phù hợp với hướng di chuyển
-                    touchMoveDirection.addInPlace(cameraDirection.scale(-touchMovement.y));
-                    touchMoveDirection.addInPlace(cameraRight.scale(touchMovement.x));
+                if (touchMovement) {
+                    console.log('Touch movement data received:', touchMovement);
                     
-                    if (touchMoveDirection.lengthSquared() > 0.001) {
-                        moveDirection.addInPlace(touchMoveDirection);
-                        isMoving = true;
-                        console.log('Avatar moving with touch:', moveDirection);
+                    // Kiểm tra xem touchMovement có dữ liệu di chuyển không
+                    if (touchMovement.isMoving) {
+                        console.log('Touch movement is active, calculating direction');
+                        const touchMoveDirection = Vector3.Zero();
+                        
+                        // Đảo ngược y để phù hợp với hướng di chuyển
+                        touchMoveDirection.addInPlace(cameraDirection.scale(-touchMovement.y));
+                        touchMoveDirection.addInPlace(cameraRight.scale(touchMovement.x));
+                        
+                        console.log('Touch direction calculated:', {
+                            x: touchMovement.x,
+                            y: touchMovement.y,
+                            directionLength: touchMoveDirection.length()
+                        });
+                        
+                        // Đảm bảo có chuyển động đủ lớn
+                        if (touchMoveDirection.lengthSquared() > 0.001) {
+                            moveDirection.addInPlace(touchMoveDirection);
+                            isMoving = true;
+                            console.log('Avatar moving with touch:', moveDirection);
+                        } else {
+                            console.log('Touch movement too small, ignoring');
+                        }
+                    } else {
+                        console.log('Touch movement is not active (isMoving=false)');
                     }
                 }
 
