@@ -3,7 +3,7 @@ import React from 'react';
 import { AvatarConfig, AvailableParts, Gender, getDefaultConfigForGender } from './avatarPartsData';
 
 interface AvatarControlsProps {
-    currentConfig: AvatarConfig;
+    avatarConfig: AvatarConfig;
     availableParts: AvailableParts;
     onGenderChange: (newGender: Gender) => void;
     onPartChange: (partType: string, fileName: string | null) => void;
@@ -13,7 +13,7 @@ interface AvatarControlsProps {
 }
 
 const AvatarControls: React.FC<AvatarControlsProps> = ({
-    currentConfig,
+    avatarConfig,
     availableParts,
     onGenderChange,
     onPartChange,
@@ -21,12 +21,12 @@ const AvatarControls: React.FC<AvatarControlsProps> = ({
     onSaveAvatar,
     onLoadAvatar
 }) => {
-    const currentGenderData = availableParts[currentConfig.gender];
+    const currentGenderData = availableParts[avatarConfig.gender];
 
-    if (!currentConfig || !currentGenderData) {
-        // Attempt to use a fallback or show loading, though App.tsx should ensure valid currentConfig
+    if (!avatarConfig || !currentGenderData) {
+        // Attempt to use a fallback or show loading, though App.tsx should ensure valid avatarConfig
         const fallbackGender: Gender = 'male';
-        const tempConfig = currentConfig || getDefaultConfigForGender(fallbackGender);
+        const tempConfig = avatarConfig || getDefaultConfigForGender(fallbackGender);
         if (!availableParts[tempConfig.gender]) {
             return <div className="controls-panel">Error: Core avatar data unavailable.</div>;
         }
@@ -41,7 +41,7 @@ const AvatarControls: React.FC<AvatarControlsProps> = ({
                 <label htmlFor="gender-select">Gender:</label>
                 <select
                     id="gender-select"
-                    value={currentConfig.gender}
+                    value={avatarConfig.gender}
                     onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onGenderChange(e.target.value as Gender)}
                 >
                     {(Object.keys(availableParts) as Gender[]).map(genderKey => (
@@ -54,7 +54,7 @@ const AvatarControls: React.FC<AvatarControlsProps> = ({
 
             {(Object.keys(currentGenderData.selectableParts) as Array<keyof typeof currentGenderData.selectableParts>).map(partType => {
                 const items = currentGenderData.selectableParts[partType] || [];
-                const currentPartFileName = currentConfig.parts[partType] ?? "null";
+                const currentPartFileName = avatarConfig.parts[partType] ?? "null";
 
                 return (
                     <div className="control-group" key={partType}>
@@ -84,7 +84,7 @@ const AvatarControls: React.FC<AvatarControlsProps> = ({
                                 <input
                                     type="color"
                                     id={`${partType}-color`}
-                                    value={currentConfig.colors[partType] || currentGenderData.defaultColors[partType as keyof typeof currentGenderData.defaultColors] || '#FFFFFF'}
+                                    value={avatarConfig.colors[partType] || currentGenderData.defaultColors[partType as keyof typeof currentGenderData.defaultColors] || '#FFFFFF'}
                                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => onColorChange(partType, e.target.value)}
                                 />
                             </div>

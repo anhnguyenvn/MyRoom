@@ -1,0 +1,191 @@
+/* src/TouchController.css */
+.touch-controller {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.joystick {
+  position: absolute;
+  bottom: 80px;
+  left: 80px;
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: auto;
+  transition: all 0.1s ease;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.joystick.active {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.05);
+}
+
+.joystick-knob {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4CAF50, #45a049);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  transition: all 0.1s ease;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.joystick.active .joystick-knob {
+  background: linear-gradient(135deg, #66BB6A, #4CAF50);
+  transform: scale(1.1);
+}
+
+.touch-instructions {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.instruction-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.instruction-icon {
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.joystick-icon {
+  background: linear-gradient(135deg, #4CAF50, #45a049);
+  border-radius: 50%;
+  font-size: 12px;
+}
+
+.touch-icon {
+  background: linear-gradient(135deg, #2196F3, #1976D2);
+  border-radius: 50%;
+  font-size: 12px;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .joystick {
+    bottom: 60px;
+    left: 60px;
+    width: 80px;
+    height: 80px;
+  }
+  
+  .joystick-knob {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .touch-instructions {
+    top: 15px;
+    right: 15px;
+  }
+  
+  .instruction-item {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  
+  .instruction-icon {
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+  }
+}
+
+/* Landscape mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+  .joystick {
+    bottom: 40px;
+    left: 40px;
+    width: 70px;
+    height: 70px;
+  }
+  
+  .joystick-knob {
+    width: 28px;
+    height: 28px;
+  }
+  
+  .touch-instructions {
+    top: 10px;
+    right: 10px;
+  }
+}
+
+/* Touch feedback */
+.touch-controller * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Animation for joystick appearance */
+@keyframes joystickAppear {
+  from {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.joystick {
+  animation: joystickAppear 0.3s ease-out;
+}
+
+/* Pulse animation for instructions */
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.instruction-item:first-child {
+  animation: pulse 2s infinite;
+  animation-delay: 1s;
+}

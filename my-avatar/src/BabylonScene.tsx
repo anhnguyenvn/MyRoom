@@ -28,9 +28,21 @@ export interface ActiveMovement {
     dance: boolean;
 }
 
+export interface TouchMovement {
+    x: number;
+    y: number;
+    isMoving: boolean;
+}
+
+export interface TouchRotation {
+    delta: number;
+}
+
 interface BabylonSceneProps {
     modelsToLoad: ModelInfo[];
     activeMovement: ActiveMovement;
+    touchMovement?: TouchMovement;
+    touchRotation?: TouchRotation;
 }
 
 interface LoadedPartEntry {
@@ -46,7 +58,7 @@ export interface BabylonSceneHandle {
 
 const rotationMatrix = new Matrix(); // Khai báo ở ngoài để tái sử dụng
 
-const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ modelsToLoad, activeMovement }, ref) => {
+const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ modelsToLoad, activeMovement, touchMovement, touchRotation }, ref) => {
     const reactCanvas = useRef<HTMLCanvasElement>(null);
     const engineRef = useRef<Nullable<Engine>>(null);
     const sceneRef = useRef<Nullable<Scene>>(null);
@@ -66,6 +78,7 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
     const jumpStartTimeRef = useRef(0);
     const jumpHeight = 1.5;
     const jumpDuration = 1000; // milliseconds
+    const touchRotationRef = useRef(0);
 
     const defaultCameraAlpha = -Math.PI / 1.5;
     const defaultCameraBeta = Math.PI / 2.5;
@@ -305,12 +318,24 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                 cameraDirection.normalize();
                 cameraRight.normalize();
 
-                // Xử lý di chuyển
+                // Xử lý di chuyển từ keyboard
                 const currentSpeed = activeMovement.run ? runSpeed : movementSpeed;
                 if (activeMovement.forward) { moveDirection.addInPlace(cameraDirection); isMoving = true; }
                 if (activeMovement.backward) { moveDirection.subtractInPlace(cameraDirection); isMoving = true; }
                 if (activeMovement.right) { moveDirection.addInPlace(cameraRight); isMoving = true; }
                 if (activeMovement.left) { moveDirection.subtractInPlace(cameraRight); isMoving = true; }
+
+                // Xử lý di chuyển từ touch
+                if (touchMovement && touchMovement.isMoving) {
+                    const touchMoveDirection = Vector3.Zero();
+                    touchMoveDirection.addInPlace(cameraDirection.scale(touchMovement.y));
+                    touchMoveDirection.addInPlace(cameraRight.scale(touchMovement.x));
+                    
+                    if (touchMoveDirection.lengthSquared() > 0.001) {
+                        moveDirection.addInPlace(touchMoveDirection);
+                        isMoving = true;
+                    }
+                }
 
                 if (isMoving && moveDirection.lengthSquared() > 0.001) {
                     moveDirection.normalize().scaleInPlace(currentSpeed * deltaTime);
@@ -333,10 +358,16 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                     }
                 }
 
-                // Xử lý xoay
+                // Xử lý xoay từ keyboard
                 let rotationAmount = 0;
-                if (activeMovement.turnLeft) { rotationAmount = -rotationSpeed * deltaTime; isMoving = true; }
-                if (activeMovement.turnRight) { rotationAmount = rotationSpeed * deltaTime; isMoving = true; }
+                if (activeMovement.turnLeft) { rotationAmount = -rotationSpeed * deltaTime; }
+                if (activeMovement.turnRight) { rotationAmount = rotationSpeed * deltaTime; }
+                
+                // Xử lý xoay từ touch
+                if (touchRotation && Math.abs(touchRotation.delta) > 0.001) {
+                    rotationAmount += touchRotation.delta;
+                }
+                
                 if (rotationAmount !== 0) {
                     avatarRootRef.current.rotation.y += rotationAmount;
                 }

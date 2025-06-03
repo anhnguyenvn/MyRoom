@@ -2,8 +2,9 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import './App.css';
 import './AvatarControls.css';
-import BabylonScene, { ModelInfo, BabylonSceneHandle, ActiveMovement } from './BabylonScene';
+import BabylonScene, { ModelInfo, BabylonSceneHandle, ActiveMovement, TouchMovement, TouchRotation } from './BabylonScene';
 import AvatarControls from './AvatarControls';
+import TouchController from './TouchController';
 import { availablePartsData, getDefaultConfigForGender, AvatarConfig, Gender, AvatarPartPaths, AvatarColors } from './avatarPartsData';
 
 const App: React.FC = () => {
@@ -14,8 +15,14 @@ const App: React.FC = () => {
         turnLeft: false, turnRight: false, jump: false, run: false,
         wave: false, dance: false
     });
+    
+    const [touchMovement, setTouchMovement] = useState<TouchMovement>({ x: 0, y: 0, isMoving: false });
+    const [touchRotation, setTouchRotation] = useState<TouchRotation>({ delta: 0 });
+    const [isMobile, setIsMobile] = useState(false);
+    const [showTouchControls, setShowTouchControls] = useState(false);
+    const [modelsToLoad, setModelsToLoad] = useState<ModelInfo[]>([]);
 
-    const modelsToLoad: ModelInfo[] = useMemo(() => {
+    const computedModelsToLoad: ModelInfo[] = useMemo(() => {
         const newModels: ModelInfo[] = [];
         const genderData = availablePartsData[avatarConfig.gender];
         if (!genderData) return [];
@@ -35,107 +42,141 @@ const App: React.FC = () => {
         return newModels;
     }, [avatarConfig]);
 
+    // Sync computed models to state when avatar config changes
+    useEffect(() => {
+        setModelsToLoad(computedModelsToLoad);
+    }, [computedModelsToLoad]);
+
+    // Detect mobile device
+    useEffect(() => {
+        const checkMobile = () => {
+            const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                                 (window.innerWidth <= 768 && 'ontouchstart' in window);
+            setIsMobile(isMobileDevice);
+            setShowTouchControls(isMobileDevice);
+        };
+        
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+
+    // Handle touch movement
+    const handleTouchMovement = useCallback((movement: TouchMovement) => {
+        setTouchMovement(movement);
+    }, []);
+
+    // Handle touch rotation
+    const handleTouchRotation = useCallback((rotationDelta: number) => {
+        setTouchRotation({ delta: rotationDelta });
+        // Reset rotation delta after a short time
+        setTimeout(() => setTouchRotation({ delta: 0 }), 50);
+    }, []);
+
     const handleGenderChange = useCallback((newGender: Gender) => {
-        if (availablePartsData[newGender]) {
-            // Dispose tất cả các part hiện tại trước khi load gender mới
-            const currentConfig = avatarConfig;
-            const currentGenderData = availablePartsData[currentConfig.gender];
+        if (newGender !== avatarConfig.gender) {
+            // Dispose all current parts before changing gender
+            const currentParts = Object.keys(avatarConfig.parts) as (keyof AvatarPartPaths)[];
+            const disposeParts: ModelInfo[] = currentParts.map(partType => ({
+                type: partType,
+                path: null,
+                color: null
+            }));
             
-            // Dispose tất cả các selectable parts
-            for (const partType in currentGenderData.selectableParts) {
-                if (currentConfig.parts[partType]) {
-                    // Gọi dispose thông qua BabylonScene ref
-                    babylonSceneRef.current?.disposePart?.(partType);
-                }
-            }
-
-            // Dispose các fixed parts
-            for (const partType in currentGenderData.fixedParts) {
-                if (currentConfig.parts[partType]) {
-                    babylonSceneRef.current?.disposePart?.(partType);
-                }
-            }
-
-            // Load cấu hình mới cho gender mới
+            setModelsToLoad(disposeParts);
+            
+            // Set new gender config after a short delay to ensure disposal
+            setTimeout(() => {
+                setAvatarConfig(getDefaultConfigForGender(newGender));
+            }, 100);
+        } else {
             setAvatarConfig(getDefaultConfigForGender(newGender));
         }
     }, [avatarConfig]);
 
     const handlePartChange = useCallback((partType: string, fileName: string | null) => {
-        setAvatarConfig(prevConfig => {
-            const newParts: AvatarPartPaths = { ...prevConfig.parts };
-            const newColors: AvatarColors = { ...prevConfig.colors };
-
-            // Nếu đang chọn fullset, set các part liên quan về null
+        setAvatarConfig(prev => {
+            const newConfig = { ...prev };
+            
+            // Handle fullset logic
             if (partType === 'fullset') {
-                newParts.top = null;
-                newParts.bottom = null;
-                newParts.shoes = null;
-                // Xóa màu của các part đã bị disable
-                delete newColors.top;
-                delete newColors.bottom;
-                delete newColors.shoes;
+                if (fileName) {
+                    // When selecting a fullset, clear individual clothing parts
+                    newConfig.parts = {
+                        ...newConfig.parts,
+                        fullset: fileName,
+                        top: null,
+                        bottom: null
+                    };
+                } else {
+                    // When removing fullset, just clear it
+                    newConfig.parts = {
+                        ...newConfig.parts,
+                        fullset: null
+                    };
+                }
+            } else if (partType === 'top' || partType === 'bottom') {
+                // When selecting individual clothing, clear fullset
+                if (fileName && newConfig.parts.fullset) {
+                    newConfig.parts = {
+                        ...newConfig.parts,
+                        fullset: null,
+                        [partType]: fileName
+                    };
+                } else {
+                    newConfig.parts = {
+                        ...newConfig.parts,
+                        [partType]: fileName
+                    };
+                }
+            } else {
+                // For other parts, just update normally
+                newConfig.parts = {
+                    ...newConfig.parts,
+                    [partType]: fileName
+                };
             }
-            // Nếu đang chọn một clothing part và đang có fullset, set fullset về null
-            else if (['top', 'bottom', 'shoes'].includes(partType) && newParts.fullset) {
-                newParts.fullset = null;
-                delete newColors.fullset;
-            }
-
-            // Cập nhật part được chọn
-            newParts[partType] = fileName;
-
-            // Xử lý màu sắc
-            const defaultColorForPart = availablePartsData[prevConfig.gender]?.defaultColors?.[partType];
-            if (fileName !== null && !newColors[partType]) {
-                newColors[partType] = defaultColorForPart || '#FFFFFF';
-            } else if (fileName === null) {
-                delete newColors[partType];
-            }
-
-            return { ...prevConfig, parts: newParts, colors: newColors };
+            
+            return newConfig;
         });
     }, []);
 
     const handleColorChange = useCallback((partType: string, color: string) => {
-        setAvatarConfig(prevConfig => ({
-            ...prevConfig, colors: { ...prevConfig.colors, [partType]: color }
+        setAvatarConfig(prev => ({
+            ...prev,
+            colors: {
+                ...prev.colors,
+                [partType]: color
+            }
         }));
     }, []);
 
     const handleSaveAvatar = useCallback(() => {
         try {
-            // Tạo một bản sao của config để loại bỏ các trường không cần thiết
-            const configToSave = {
+            // Create a clean config object without null values
+            const cleanConfig = {
                 gender: avatarConfig.gender,
-                parts: { ...avatarConfig.parts },
-                colors: { ...avatarConfig.colors }
+                parts: Object.fromEntries(
+                    Object.entries(avatarConfig.parts).filter(([_, value]) => value !== null)
+                ),
+                colors: Object.fromEntries(
+                    Object.entries(avatarConfig.colors).filter(([_, value]) => value !== null && value !== undefined)
+                )
             };
-
-            // Loại bỏ các part null và color không cần thiết
-            Object.keys(configToSave.parts).forEach(key => {
-                if (configToSave.parts[key] === null) {
-                    delete configToSave.parts[key];
-                }
-            });
-
-            Object.keys(configToSave.colors).forEach(key => {
-                if (!configToSave.parts[key]) {
-                    delete configToSave.colors[key];
-                }
-            });
-
-            const jsonString = JSON.stringify(configToSave, null, 2);
-            const blob = new Blob([jsonString], { type: "application/json" });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = `avatar_${avatarConfig.gender}_${new Date().toISOString().slice(0,10)}.json`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(link.href);
+            
+            const dataStr = JSON.stringify(cleanConfig, null, 2);
+            const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+            
+            const exportFileDefaultName = `avatar-config-${Date.now()}.json`;
+            
+            const linkElement = document.createElement('a');
+            linkElement.setAttribute('href', dataUri);
+            linkElement.setAttribute('download', exportFileDefaultName);
+            linkElement.click();
+            
+            alert("Avatar configuration saved successfully!");
         } catch (error) {
-            console.error("Error saving avatar:", error);
+            console.error("Error saving avatar config:", error);
             alert("Could not save avatar config. Please try again.");
         }
     }, [avatarConfig]);
@@ -143,186 +184,193 @@ const App: React.FC = () => {
     const handleLoadAvatar = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file) return;
-
-        // Kiểm tra kích thước file (giới hạn 1MB)
+        
+        // Validate file size (max 1MB)
         if (file.size > 1024 * 1024) {
-            alert("File is too large. Maximum size is 1MB.");
-            event.target.value = "";
+            alert("File too large. Please select a file smaller than 1MB.");
             return;
         }
-
-        // Kiểm tra loại file
-        if (file.type !== "application/json") {
+        
+        // Validate file type
+        if (file.type !== 'application/json' && !file.name.endsWith('.json')) {
             alert("Please select a valid JSON file.");
-            event.target.value = "";
             return;
         }
-
+        
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
-                if (typeof e.target?.result !== 'string') {
-                    throw new Error("File content is not a string");
+                const result = e.target?.result;
+                if (typeof result !== 'string') {
+                    throw new Error("Invalid file content");
                 }
-
-                const loaded: AvatarConfig = JSON.parse(e.target.result);
-
-                // Validate cấu trúc cơ bản
-                if (!loaded.gender || !loaded.parts || !loaded.colors) {
-                    throw new Error("Invalid avatar config structure");
-                }
-
-                // Validate gender
-                if (!availablePartsData[loaded.gender]) {
-                    throw new Error(`Invalid gender: ${loaded.gender}`);
-                }
-
-                // Dispose tất cả các part hiện tại
-                const currentConfig = avatarConfig;
-                const currentGenderData = availablePartsData[currentConfig.gender];
                 
-                // Dispose selectable parts
-                for (const partType in currentGenderData.selectableParts) {
-                    if (currentConfig.parts[partType]) {
-                        babylonSceneRef.current?.disposePart?.(partType);
-                    }
+                const loadedConfig = JSON.parse(result) as Partial<AvatarConfig>;
+                
+                // Validate the loaded config
+                if (!loadedConfig.gender || !loadedConfig.parts) {
+                    throw new Error("Invalid avatar configuration format");
                 }
-
-                // Dispose fixed parts
-                for (const partType in currentGenderData.fixedParts) {
-                    if (currentConfig.parts[partType]) {
-                        babylonSceneRef.current?.disposePart?.(partType);
-                    }
+                
+                // Validate gender
+                if (!availablePartsData[loadedConfig.gender as Gender]) {
+                    throw new Error(`Invalid gender: ${loadedConfig.gender}`);
                 }
-
-                // Tạo config mới với validation
-                const baseConfig = getDefaultConfigForGender(loaded.gender);
-                const validatedConfig: AvatarConfig = {
-                    gender: loaded.gender,
-                    parts: { ...baseConfig.parts },
-                    colors: { ...baseConfig.colors }
-                };
-
-                // Validate và set parts
-                const selectablePartsForGender = availablePartsData[loaded.gender].selectableParts;
-                for (const partKey in loaded.parts) {
-                    if (validatedConfig.parts.hasOwnProperty(partKey)) {
-                        const loadedFile = loaded.parts[partKey];
-                        if (selectablePartsForGender.hasOwnProperty(partKey)) {
-                            const isValid = (selectablePartsForGender[partKey as keyof typeof selectablePartsForGender] || [])
-                                .some(p => p.fileName === loadedFile);
-                            if (isValid || loadedFile === null) {
-                                validatedConfig.parts[partKey] = loadedFile;
-                            } else {
-                                console.warn(`Invalid file for part ${partKey}: ${loadedFile}`);
-                                validatedConfig.parts[partKey] = null;
+                
+                // Dispose current avatar parts first
+                const currentParts = Object.keys(avatarConfig.parts) as (keyof AvatarPartPaths)[];
+                const disposeParts: ModelInfo[] = currentParts.map(partType => ({
+                    type: partType,
+                    path: null,
+                    color: null
+                }));
+                
+                setModelsToLoad(disposeParts);
+                
+                // Apply the loaded configuration after a short delay
+                setTimeout(() => {
+                    const genderData = availablePartsData[loadedConfig.gender as Gender];
+                    const newConfig: AvatarConfig = {
+                        gender: loadedConfig.gender as Gender,
+                        parts: { ...genderData.selectableParts },
+                        colors: { ...genderData.defaultColors }
+                    };
+                    
+                    // Apply loaded parts
+                    if (loadedConfig.parts) {
+                        for (const [partType, fileName] of Object.entries(loadedConfig.parts)) {
+                            if (fileName && typeof fileName === 'string') {
+                                // Validate that the part exists for this gender
+                                const availableParts = genderData.selectableParts[partType];
+                                if (availableParts && availableParts.some(part => part.fileName === fileName)) {
+                                    newConfig.parts[partType] = fileName;
+                                }
                             }
                         }
                     }
-                }
-
-                // Validate và set colors
-                for (const colorKey in loaded.colors) {
-                    if (validatedConfig.parts[colorKey] && loaded.colors[colorKey]) {
-                        // Validate color format
-                        const colorRegex = /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/;
-                        if (colorRegex.test(loaded.colors[colorKey])) {
-                            validatedConfig.colors[colorKey] = loaded.colors[colorKey];
-                        } else {
-                            console.warn(`Invalid color format for ${colorKey}: ${loaded.colors[colorKey]}`);
-                            validatedConfig.colors[colorKey] = baseConfig.colors[colorKey] || '#FFFFFF';
+                    
+                    // Apply loaded colors
+                    if (loadedConfig.colors) {
+                        for (const [partType, color] of Object.entries(loadedConfig.colors)) {
+                            if (color && typeof color === 'string') {
+                                newConfig.colors[partType] = color;
+                            }
                         }
                     }
-                }
-
-                // Xử lý fullset và clothing parts
-                if (validatedConfig.parts.fullset) {
-                    validatedConfig.parts.top = null;
-                    validatedConfig.parts.bottom = null;
-                    validatedConfig.parts.shoes = null;
-                    delete validatedConfig.colors.top;
-                    delete validatedConfig.colors.bottom;
-                    delete validatedConfig.colors.shoes;
-                }
-
-                setAvatarConfig(validatedConfig);
-                alert("Avatar loaded successfully!");
-            } catch (err) {
-                console.error("Error loading avatar:", err);
-                alert(`Error loading avatar: ${err instanceof Error ? err.message : "Unknown error"}`);
+                    
+                    setAvatarConfig(newConfig);
+                    alert("Avatar configuration loaded successfully!");
+                }, 200);
+                
+            } catch (error) {
+                console.error("Error loading avatar config:", error);
+                alert(`Could not load avatar config: ${error instanceof Error ? error.message : 'Unknown error'}`);
             }
         };
-
-        reader.onerror = () => {
-            alert("Error reading file. Please try again.");
-        };
-
+        
         reader.readAsText(file);
         event.target.value = ""; // Reset input
     }, [avatarConfig]);
 
     useEffect(() => {
-        const keyMap: Record<string, keyof ActiveMovement | null> = {
-            w: 'forward', s: 'backward', a: 'left', d: 'right',
-            q: 'turnLeft', e: 'turnRight', space: 'jump', shift: 'run',
-            '1': 'wave', '2': 'dance'
-        };
-
-        const handleKeyAction = (event: KeyboardEvent, isActive: boolean) => {
-            const action = keyMap[event.key.toLowerCase()];
-            if (action) {
-                // Ngăn hành vi mặc định của trình duyệt cho các phím đặc biệt
-                if (['w', 's', 'a', 'd', 'q', 'e', ' ', 'shift', '1', '2'].includes(event.key.toLowerCase())) {
-                    event.preventDefault();
-                }
-                setActiveMovement(prev => {
-                    if (prev[action] !== isActive) return { ...prev, [action]: isActive };
-                    return prev;
-                });
+        const handleKeyDown = (event: KeyboardEvent) => {
+            switch (event.code) {
+                case 'KeyW': setActiveMovement(prev => ({ ...prev, forward: true })); break;
+                case 'KeyS': setActiveMovement(prev => ({ ...prev, backward: true })); break;
+                case 'KeyA': setActiveMovement(prev => ({ ...prev, left: true })); break;
+                case 'KeyD': setActiveMovement(prev => ({ ...prev, right: true })); break;
+                case 'KeyQ': setActiveMovement(prev => ({ ...prev, turnLeft: true })); break;
+                case 'KeyE': setActiveMovement(prev => ({ ...prev, turnRight: true })); break;
+                case 'Space': setActiveMovement(prev => ({ ...prev, jump: true })); break;
+                case 'ShiftLeft': setActiveMovement(prev => ({ ...prev, run: true })); break;
+                case 'Digit1': setActiveMovement(prev => ({ ...prev, wave: true })); break;
+                case 'Digit2': setActiveMovement(prev => ({ ...prev, dance: true })); break;
             }
         };
 
-        const onKeyDown = (e: KeyboardEvent) => handleKeyAction(e, true);
-        const onKeyUp = (e: KeyboardEvent) => handleKeyAction(e, false);
+        const handleKeyUp = (event: KeyboardEvent) => {
+            switch (event.code) {
+                case 'KeyW': setActiveMovement(prev => ({ ...prev, forward: false })); break;
+                case 'KeyS': setActiveMovement(prev => ({ ...prev, backward: false })); break;
+                case 'KeyA': setActiveMovement(prev => ({ ...prev, left: false })); break;
+                case 'KeyD': setActiveMovement(prev => ({ ...prev, right: false })); break;
+                case 'KeyQ': setActiveMovement(prev => ({ ...prev, turnLeft: false })); break;
+                case 'KeyE': setActiveMovement(prev => ({ ...prev, turnRight: false })); break;
+                case 'Space': setActiveMovement(prev => ({ ...prev, jump: false })); break;
+                case 'ShiftLeft': setActiveMovement(prev => ({ ...prev, run: false })); break;
+                case 'Digit1': setActiveMovement(prev => ({ ...prev, wave: false })); break;
+                case 'Digit2': setActiveMovement(prev => ({ ...prev, dance: false })); break;
+            }
+        };
 
-        window.addEventListener('keydown', onKeyDown);
-        window.addEventListener('keyup', onKeyUp);
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('keyup', handleKeyUp);
+
         return () => {
-            window.removeEventListener('keydown', onKeyDown);
-            window.removeEventListener('keyup', onKeyUp);
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('keyup', handleKeyUp);
         };
     }, []);
 
     const handleResetCamera = () => babylonSceneRef.current?.resetCamera();
     const handleToggleInspector = () => babylonSceneRef.current?.toggleInspector();
+    const handleToggleTouchControls = () => setShowTouchControls(!showTouchControls);
 
     return (
-        <div className="App">
-            <header className="App-header"><h1>Avatar Customizer</h1></header>
+        <div className="app">
             <div className="main-content">
                 <div className="scene-container">
-                    <BabylonScene ref={babylonSceneRef} modelsToLoad={modelsToLoad} activeMovement={activeMovement} />
+                    <BabylonScene 
+                        ref={babylonSceneRef} 
+                        modelsToLoad={modelsToLoad} 
+                        activeMovement={activeMovement}
+                        touchMovement={touchMovement}
+                        touchRotation={touchRotation}
+                    />
+                    <TouchController
+                        onMovementChange={handleTouchMovement}
+                        onRotationChange={handleTouchRotation}
+                        isVisible={showTouchControls}
+                    />
                 </div>
                 <div className="controls-container">
                     <AvatarControls
-                        currentConfig={avatarConfig} availableParts={availablePartsData}
-                        onGenderChange={handleGenderChange} onPartChange={handlePartChange}
-                        onColorChange={handleColorChange} onSaveAvatar={handleSaveAvatar}
+                        avatarConfig={avatarConfig}
+                        availableParts={availablePartsData}
+                        onGenderChange={handleGenderChange}
+                        onPartChange={handlePartChange}
+                        onColorChange={handleColorChange}
+                        onSaveAvatar={handleSaveAvatar}
                         onLoadAvatar={handleLoadAvatar}
                     />
                     <div className="action-buttons" style={{ marginTop: '20px', borderTop: '1px solid #eee', paddingTop: '15px' }}>
                         <button onClick={handleResetCamera}>Reset Camera View</button>
                         <button onClick={handleToggleInspector} style={{ marginTop: '10px' }}>Toggle Scene Explorer</button>
+                        {isMobile && (
+                            <button onClick={handleToggleTouchControls} style={{ marginTop: '10px' }}>
+                                {showTouchControls ? 'Hide' : 'Show'} Touch Controls
+                            </button>
+                        )}
                     </div>
                     <div className="movement-instructions" style={{ marginTop: '20px', fontSize: '0.9em', textAlign: 'left', padding: '10px', background: '#f9f9f9', borderRadius: '4px' }}>
                         <strong>Điều khiển:</strong><br />
-                        W: Tiến, S: Lùi<br />
-                        A: Sang trái (Strafe), D: Sang phải (Strafe)<br />
-                        Q: Xoay trái, E: Xoay phải<br />
-                        Space: Nhảy<br />
-                        Shift: Chạy<br />
-                        1: Vẫy tay<br />
-                        2: Nhảy múa
+                        {!isMobile ? (
+                            <>
+                                W: Tiến, S: Lùi<br />
+                                A: Sang trái (Strafe), D: Sang phải (Strafe)<br />
+                                Q: Xoay trái, E: Xoay phải<br />
+                                Space: Nhảy<br />
+                                Shift: Chạy<br />
+                                1: Vẫy tay<br />
+                                2: Nhảy múa
+                            </>
+                        ) : (
+                            <>
+                                🕹️ Joystick: Di chuyển nhân vật<br />
+                                👆 Touch màn hình: Xoay nhân vật<br />
+                                {showTouchControls ? 'Touch controls đang bật' : 'Touch controls đang tắt'}
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
