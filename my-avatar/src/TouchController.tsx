@@ -54,70 +54,50 @@ const TouchController: React.FC<TouchControllerProps> = ({
   const knobRadius = 20; // Bán kính của knob
   const maxDistance = joystickRadius - knobRadius;
 
-  const updateMovement = useCallback((absoluteX: number, absoluteY: number, centerX: number, centerY: number) => {
-    console.log('updateMovement called with absolute position:', { absoluteX, absoluteY, centerX, centerY });
+  const updateMovement = useCallback((currentX: number, currentY: number, centerX: number, centerY: number) => {
+    // Tính toán delta từ vị trí bắt đầu (center của joystick)
+    const deltaX = currentX - centerX;
+    const deltaY = currentY - centerY;
     
-    // Kiểm tra đầu vào
-    if (isNaN(absoluteX) || isNaN(absoluteY) || isNaN(centerX) || isNaN(centerY)) {
-      console.error('Invalid input to updateMovement - contains NaN values');
-      return;
-    }
+    console.log('Movement calculation:', { deltaX, deltaY });
     
-    // Tính toán khoảng cách từ vị trí hiện tại đến trung tâm joystick
-    const deltaX = absoluteX - centerX;
-    const deltaY = absoluteY - centerY;
-    
-    console.log('Delta values:', { deltaX, deltaY });
-    
+    // Tính toán khoảng cách từ điểm hiện tại đến trung tâm
     const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-    const clampedDistance = Math.min(distance, maxDistance);
     
-    console.log('Movement calculation - distance:', distance, 'clampedDistance:', clampedDistance, 'maxDistance:', maxDistance);
+    // Giới hạn khoảng cách tối đa (bán kính của joystick)
+    const maxRadius = 50;
+    const clampedDistance = Math.min(distance, maxRadius);
     
-    if (clampedDistance > 0) {
-      const angle = Math.atan2(deltaY, deltaX);
-      const clampedX = Math.cos(angle) * clampedDistance;
-      const clampedY = Math.sin(angle) * clampedDistance;
-      
-      console.log('Clamped position:', { clampedX, clampedY, angle: angle * (180 / Math.PI) });
-      
-      setJoystickPosition({ x: clampedX, y: clampedY });
-      
-      // Normalize movement values to -1 to 1 range
-      const movementX = clampedX / maxDistance;
-      const movementY = clampedY / maxDistance;
-      
-      console.log('Normalized movement:', { movementX, movementY });
-      
-      // Tính toán normalizedDistance để kiểm tra dead zone
-      const normalizedDistance = Math.sqrt(movementX * movementX + movementY * movementY);
-      const deadZone = 0.001; // Giảm xuống 0.1% dead zone để nhạy hơn
-      
-      // Đảm bảo luôn có giá trị isMoving = true khi có chuyển động
-      const isMoving = normalizedDistance >= deadZone;
-      
-      console.log('Movement check:', { normalizedDistance, deadZone, isMovingCheck: normalizedDistance >= deadZone });
-      
-      // Tạo dữ liệu di chuyển với giá trị isMoving
-      const movementData = {
-        x: movementX,
-        y: movementY,
-        isMoving: true // Luôn đặt isMoving = true khi có chuyển động
-      };
-      
-      // Đảm bảo rằng khi có chuyển động, isMoving luôn là true
-      if (normalizedDistance > 0 && !isMoving) {
-        console.log('Force setting isMoving to true for small movement');
-        movementData.isMoving = true;
-      }
-      
-      console.log('Sending movement data:', movementData, 'normalizedDistance:', normalizedDistance, 'deadZone:', deadZone, 'isMoving:', isMoving);
-      onMovementChange(movementData);
-    } else {
-      setJoystickPosition({ x: 0, y: 0 });
-      onMovementChange({ x: 0, y: 0, isMoving: false });
-    }
-  }, [maxDistance, onMovementChange]);
+    // Luôn xử lý di chuyển, ngay cả khi rất nhỏ
+    // Chuẩn hóa vector chuyển động
+    // Nếu khoảng cách quá nhỏ, sử dụng giá trị mặc định để tránh chia cho 0
+    const normalizedX = distance > 0.0001 ? deltaX / distance : 0;
+    const normalizedY = distance > 0.0001 ? deltaY / distance : 0;
+    
+    // Tính toán cường độ di chuyển dựa trên khoảng cách (0-1)
+    const normalizedDistance = clampedDistance / maxRadius;
+    
+    // Giảm deadzone để tăng độ nhạy
+    const deadZone = 0.0001;
+    const intensity = normalizedDistance < deadZone ? 0 : normalizedDistance;
+    
+    // Đảo ngược trục Y vì trong game, hướng lên thường là giá trị âm
+    const movementData = {
+      x: normalizedX * intensity,
+      y: -normalizedY * intensity, // Đảo ngược trục Y
+      isMoving: intensity > 0
+    };
+    
+    console.log('Movement data:', movementData);
+    
+    // Cập nhật vị trí joystick
+    const joystickX = normalizedX * clampedDistance;
+    const joystickY = normalizedY * clampedDistance;
+    setJoystickPosition({ x: joystickX, y: joystickY });
+    
+    // Gửi dữ liệu di chuyển
+    onMovementChange(movementData);
+  }, [onMovementChange]);
 
   // Thêm state để theo dõi mouse down
   const [isMouseDown, setIsMouseDown] = useState(false);
@@ -127,73 +107,112 @@ const TouchController: React.FC<TouchControllerProps> = ({
     
     console.log('Touch start event received', { touches: e.touches.length });
     
-    if (!containerRef.current || !joystickRef.current) {
-      console.error('Container or joystick ref is null');
+    if (e.touches.length === 0) {
+      console.warn('No touches in touch start event');
       return;
     }
     
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const joystickRect = joystickRef.current.getBoundingClientRect();
+    // Lấy vị trí của joystick
+    const joystickElement = joystickRef.current;
+    if (!joystickElement) {
+      console.error('Joystick element not found');
+      return;
+    }
     
-    console.log('Container rect:', {
-      left: containerRect.left,
-      top: containerRect.top,
-      width: containerRect.width,
-      height: containerRect.height
-    });
-    
-    console.log('Joystick rect:', {
-      left: joystickRect.left,
-      top: joystickRect.top,
-      width: joystickRect.width,
-      height: joystickRect.height
-    });
-    
-    // Mở rộng vùng phát hiện joystick để dễ sử dụng hơn
+    const joystickRect = joystickElement.getBoundingClientRect();
     const joystickCenterX = joystickRect.left + joystickRect.width / 2;
     const joystickCenterY = joystickRect.top + joystickRect.height / 2;
-    const extendedRadius = Math.max(joystickRadius * 1.5, 150); // Sử dụng bán kính tối thiểu 150px
     
-    console.log('Joystick detection area:', { 
-      centerX: joystickCenterX, 
-      centerY: joystickCenterY, 
-      radius: joystickRadius,
-      extendedRadius: extendedRadius
+    console.log('Joystick position:', { 
+      left: joystickRect.left, 
+      top: joystickRect.top, 
+      width: joystickRect.width, 
+      height: joystickRect.height,
+      centerX: joystickCenterX,
+      centerY: joystickCenterY
     });
     
-    Array.from(e.changedTouches).forEach(touch => {
-      const touchX = touch.clientX;
-      const touchY = touch.clientY;
+    // Tăng bán kính phát hiện joystick để dễ sử dụng hơn
+    const extendedRadius = 200; // Tăng bán kính phát hiện lên 200px
+    
+    // Ưu tiên xử lý touch đầu tiên cho di chuyển nếu chưa có movement touch
+    if (!movementTouch && e.touches.length > 0) {
+      const firstTouch = e.touches[0];
+      const touchX = firstTouch.clientX;
+      const touchY = firstTouch.clientY;
       
-      // Check if touch is on joystick area
+      console.log('Processing first touch for movement:', { id: firstTouch.identifier, x: touchX, y: touchY });
+      
+      // Kiểm tra khoảng cách đến joystick
       const distanceToJoystick = Math.sqrt(
-        Math.pow(touchX - joystickCenterX, 2) + Math.pow(touchY - joystickCenterY, 2)
+        Math.pow(touchX - joystickCenterX, 2) + 
+        Math.pow(touchY - joystickCenterY, 2)
       );
       
-      console.log('Touch detected:', { 
-        touchX, 
-        touchY, 
-        distanceToJoystick, 
-        isInJoystickArea: distanceToJoystick <= extendedRadius 
-      });
+      console.log('Distance to joystick:', distanceToJoystick, 'Extended radius:', extendedRadius);
       
-      if (distanceToJoystick <= extendedRadius && !movementTouch) {
-        console.log('Touch accepted for movement control');
-        // Touch on joystick - handle movement
+      // Luôn sử dụng touch đầu tiên cho movement nếu chưa có movement touch
+      // hoặc nếu touch này nằm gần joystick
+      if (distanceToJoystick <= extendedRadius) {
+        console.log('Setting movement touch:', { id: firstTouch.identifier, x: touchX, y: touchY });
+        
+        // Đặt vị trí bắt đầu của touch là vị trí trung tâm của joystick
         setMovementTouch({
-          identifier: touch.identifier,
+          identifier: firstTouch.identifier,
           startX: joystickCenterX,
           startY: joystickCenterY,
           currentX: touchX,
           currentY: touchY
         });
+        
         setIsActive(true);
         
-        // Sử dụng giá trị absolute và trung tâm joystick
+        // Cập nhật movement ngay lập tức
         updateMovement(touchX, touchY, joystickCenterX, joystickCenterY);
-      } else if (!rotationTouch) {
-        console.log('Touch accepted for rotation control');
-        // Touch outside joystick - handle rotation
+      }
+    }
+    
+    // Xử lý các touch còn lại
+    Array.from(e.touches).forEach((touch, index) => {
+      // Bỏ qua touch đầu tiên nếu đã được xử lý cho movement
+      if (index === 0 && movementTouch && touch.identifier === movementTouch.identifier) {
+        return;
+      }
+      
+      const touchX = touch.clientX;
+      const touchY = touch.clientY;
+      
+      console.log('Processing additional touch:', { id: touch.identifier, x: touchX, y: touchY });
+      
+      // Nếu chưa có movement touch và touch này không phải là rotation touch
+      if (!movementTouch && (!rotationTouch || touch.identifier !== rotationTouch.identifier)) {
+        const distanceToJoystick = Math.sqrt(
+          Math.pow(touchX - joystickCenterX, 2) + 
+          Math.pow(touchY - joystickCenterY, 2)
+        );
+        
+        if (distanceToJoystick <= extendedRadius) {
+          console.log('Setting movement touch from additional touches:', { id: touch.identifier, x: touchX, y: touchY });
+          
+          setMovementTouch({
+            identifier: touch.identifier,
+            startX: joystickCenterX,
+            startY: joystickCenterY,
+            currentX: touchX,
+            currentY: touchY
+          });
+          
+          setIsActive(true);
+          
+          updateMovement(touchX, touchY, joystickCenterX, joystickCenterY);
+          return; // Đã xử lý touch này, không cần xử lý cho rotation
+        }
+      }
+      
+      // Nếu chưa có rotation touch và touch này không phải là movement touch
+      if (!rotationTouch && (!movementTouch || touch.identifier !== movementTouch.identifier)) {
+        console.log('Setting rotation touch:', { id: touch.identifier, x: touchX, y: touchY });
+        
         setRotationTouch({
           identifier: touch.identifier,
           startX: touchX,
@@ -203,7 +222,7 @@ const TouchController: React.FC<TouchControllerProps> = ({
         });
       }
     });
-  }, [movementTouch, rotationTouch, updateMovement, joystickRadius]);
+  }, [movementTouch, rotationTouch, updateMovement]);
 
   // Thêm mouse handlers
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -309,28 +328,27 @@ const TouchController: React.FC<TouchControllerProps> = ({
       return;
     }
     
-    Array.from(e.changedTouches).forEach(touch => {
-      console.log('Processing touch:', {
-        identifier: touch.identifier,
-        clientX: touch.clientX,
-        clientY: touch.clientY,
-        movementTouchId: movementTouch?.identifier,
-        rotationTouchId: rotationTouch?.identifier
-      });
+    // Ưu tiên xử lý touch di chuyển trước
+    if (movementTouch) {
+      // Tìm touch tương ứng với movementTouch
+      const moveTouch = Array.from(e.changedTouches).find(
+        touch => touch.identifier === movementTouch.identifier
+      );
       
-      if (movementTouch && touch.identifier === movementTouch.identifier) {
+      if (moveTouch) {
         console.log('Touch move detected for movement control:', { 
-          x: touch.clientX, 
-          y: touch.clientY, 
+          x: moveTouch.clientX, 
+          y: moveTouch.clientY, 
           startX: movementTouch.startX, 
           startY: movementTouch.startY,
-          deltaX: touch.clientX - movementTouch.startX,
-          deltaY: touch.clientY - movementTouch.startY
+          deltaX: moveTouch.clientX - movementTouch.startX,
+          deltaY: moveTouch.clientY - movementTouch.startY
         });
         
         // Update movement sử dụng giá trị absolute và trung tâm joystick
-        updateMovement(touch.clientX, touch.clientY, movementTouch.startX, movementTouch.startY);
+        updateMovement(moveTouch.clientX, moveTouch.clientY, movementTouch.startX, movementTouch.startY);
         
+        // Cập nhật vị trí hiện tại của touch
         setMovementTouch(prev => {
           if (!prev) {
             console.warn('Movement touch is null in update function');
@@ -338,17 +356,28 @@ const TouchController: React.FC<TouchControllerProps> = ({
           }
           console.log('Updating movement touch position', {
             from: { x: prev.currentX, y: prev.currentY },
-            to: { x: touch.clientX, y: touch.clientY }
+            to: { x: moveTouch.clientX, y: moveTouch.clientY }
           });
           return {
             ...prev,
-            currentX: touch.clientX,
-            currentY: touch.clientY
+            currentX: moveTouch.clientX,
+            currentY: moveTouch.clientY
           };
         });
-      } else if (rotationTouch && touch.identifier === rotationTouch.identifier) {
+      } else {
+        console.log('Movement touch not found in changedTouches');
+      }
+    }
+    
+    // Xử lý touch xoay
+    if (rotationTouch) {
+      const rotTouch = Array.from(e.changedTouches).find(
+        touch => touch.identifier === rotationTouch.identifier
+      );
+      
+      if (rotTouch) {
         // Update rotation
-        const deltaX = touch.clientX - rotationTouch.currentX;
+        const deltaX = rotTouch.clientX - rotationTouch.currentX;
         const sensitivity = 0.01;
         console.log('Touch move detected for rotation control:', { 
           deltaX: deltaX, 
@@ -359,35 +388,95 @@ const TouchController: React.FC<TouchControllerProps> = ({
         
         setRotationTouch(prev => prev ? {
           ...prev,
-          currentX: touch.clientX,
-          currentY: touch.clientY
+          currentX: rotTouch.clientX,
+          currentY: rotTouch.clientY
         } : null);
-      } else {
-        console.log('Touch not matching any active control');
       }
+    }
+    
+    // Xử lý các touch khác nếu cần
+    Array.from(e.changedTouches).forEach(touch => {
+      // Bỏ qua các touch đã xử lý
+      if ((movementTouch && touch.identifier === movementTouch.identifier) ||
+          (rotationTouch && touch.identifier === rotationTouch.identifier)) {
+        return;
+      }
+      
+      console.log('Unhandled touch:', {
+        identifier: touch.identifier,
+        clientX: touch.clientX,
+        clientY: touch.clientY
+      });
     });
   }, [movementTouch, rotationTouch, updateMovement, onRotationChange]);
 
   const handleTouchEnd = useCallback((e: TouchEvent) => {
     e.preventDefault();
     
+    console.log('Touch end event received', { 
+      touches: e.touches.length, 
+      changedTouches: e.changedTouches.length 
+    });
+    
+    if (e.changedTouches.length === 0) {
+      console.warn('No changed touches in touch end event');
+      return;
+    }
+    
+    let movementTouchEnded = false;
+    let rotationTouchEnded = false;
+    
     Array.from(e.changedTouches).forEach(touch => {
+      console.log('Processing ended touch:', { 
+        identifier: touch.identifier,
+        movementTouchId: movementTouch?.identifier,
+        rotationTouchId: rotationTouch?.identifier
+      });
+      
       if (movementTouch && touch.identifier === movementTouch.identifier) {
-        console.log('Touch end for movement control - resetting movement state');
+        console.log('Movement touch ended');
+        movementTouchEnded = true;
+      } else if (rotationTouch && touch.identifier === rotationTouch.identifier) {
+        console.log('Rotation touch ended');
+        rotationTouchEnded = true;
+      }
+    });
+    
+    // Xử lý kết thúc touch di chuyển
+    if (movementTouchEnded) {
+      console.log('Touch end for movement control - resetting movement state');
+      setMovementTouch(null);
+      setIsActive(false);
+      setJoystickPosition({ x: 0, y: 0 });
+      
+      // Gửi dữ liệu di chuyển với isMoving = false để dừng avatar
+      const resetMovementData = { x: 0, y: 0, isMoving: false };
+      console.log('Resetting movement data:', resetMovementData);
+      onMovementChange(resetMovementData);
+    }
+    
+    // Xử lý kết thúc touch xoay
+    if (rotationTouchEnded) {
+      console.log('Touch end for rotation control - resetting rotation state');
+      setRotationTouch(null);
+      onRotationChange(0);
+    }
+    
+    // Nếu không còn touch nào, đặt lại tất cả trạng thái
+    if (e.touches.length === 0) {
+      console.log('No touches remaining, resetting all states');
+      if (!movementTouchEnded && movementTouch) {
         setMovementTouch(null);
         setIsActive(false);
         setJoystickPosition({ x: 0, y: 0 });
-        
-        // Đảm bảo gửi trạng thái isMoving = false khi kết thúc chạm
-        const resetMovementData = { x: 0, y: 0, isMoving: false };
-        console.log('Resetting movement data:', resetMovementData);
-        onMovementChange(resetMovementData);
-      } else if (rotationTouch && touch.identifier === rotationTouch.identifier) {
-        console.log('Touch end for rotation control - resetting rotation state');
+        onMovementChange({ x: 0, y: 0, isMoving: false });
+      }
+      
+      if (!rotationTouchEnded && rotationTouch) {
         setRotationTouch(null);
         onRotationChange(0);
       }
-    });
+    }
   }, [movementTouch, rotationTouch, onMovementChange, onRotationChange]);
 
   useEffect(() => {

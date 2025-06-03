@@ -67,18 +67,25 @@ const App: React.FC = () => {
         console.log('handleTouchMovement called with data:', movement);
         
         // Kiểm tra dữ liệu di chuyển
-        if (movement.isMoving) {
-            console.log('Movement is active, updating state with:', {
+        const hasTouchMovement = Math.abs(movement.x) > 0.001 || Math.abs(movement.y) > 0.001;
+        
+        if (hasTouchMovement || movement.isMoving) {
+            console.log('Movement detected, updating state with:', {
                 x: movement.x,
                 y: movement.y,
-                isMoving: movement.isMoving
+                isMoving: true // Đảm bảo isMoving luôn là true khi có chuyển động
+            });
+            
+            // Đảm bảo isMoving luôn là true khi có chuyển động
+            setTouchMovement({
+                x: movement.x,
+                y: movement.y,
+                isMoving: true
             });
         } else {
-            console.log('Movement is not active, resetting state');
+            console.log('No movement detected, resetting state');
+            setTouchMovement({ x: 0, y: 0, isMoving: false });
         }
-        
-        // Cập nhật state với dữ liệu di chuyển mới
-        setTouchMovement(movement);
     }, []);
 
     // Handle touch rotation
