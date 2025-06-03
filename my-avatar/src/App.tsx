@@ -62,29 +62,28 @@ const App: React.FC = () => {
         return () => window.removeEventListener('resize', checkMobile);
     }, []);
 
-    // Handle touch movement
+    // Handle touch movement with improved responsiveness
     const handleTouchMovement = useCallback((movement: TouchMovement) => {
-        console.log('handleTouchMovement called with data:', movement);
-        
-        // Kiểm tra dữ liệu di chuyển
-        const hasTouchMovement = Math.abs(movement.x) > 0.001 || Math.abs(movement.y) > 0.001;
-        
-        if (hasTouchMovement || movement.isMoving) {
-            console.log('Movement detected, updating state with:', {
-                x: movement.x,
-                y: movement.y,
-                isMoving: true // Đảm bảo isMoving luôn là true khi có chuyển động
-            });
+        // Chỉ cập nhật khi có chuyển động thực sự
+        if (Math.abs(movement.x) > 0.0003 || Math.abs(movement.y) > 0.0003 || movement.isMoving) {
+            setTouchMovement(movement);
             
-            // Đảm bảo isMoving luôn là true khi có chuyển động
-            setTouchMovement({
-                x: movement.x,
-                y: movement.y,
-                isMoving: true
-            });
+            // Xóa bất kỳ timeout nào đang chờ xử lý
+            if ((window as any).touchMovementTimeout) {
+                clearTimeout((window as any).touchMovementTimeout);
+            }
         } else {
-            console.log('No movement detected, resetting state');
-            setTouchMovement({ x: 0, y: 0, isMoving: false });
+            // Thêm debounce để tránh reset trạng thái di chuyển quá nhanh
+            // Điều này giúp chuyển động mượt mà hơn khi người dùng di chuyển chậm
+            if ((window as any).touchMovementTimeout) {
+                clearTimeout((window as any).touchMovementTimeout);
+            }
+            
+            (window as any).touchMovementTimeout = setTimeout(() => {
+                // Khi không có chuyển động trong 150ms, đặt isMoving = false
+                setTouchMovement(prev => ({ ...prev, isMoving: false }));
+                (window as any).touchMovementTimeout = null;
+            }, 150);
         }
     }, []);
 

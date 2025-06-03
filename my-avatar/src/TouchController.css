@@ -24,15 +24,24 @@
   pointer-events: auto;
   transition: all 0.1s ease;
   backdrop-filter: blur(10px);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
   cursor: pointer;
   z-index: 1001;
+}
+
+@keyframes joystickActive {
+  0% { transform: scale(1.0); background: rgba(255, 255, 255, 0.3); }
+  50% { transform: scale(1.08); background: rgba(255, 255, 255, 0.25); }
+  100% { transform: scale(1.05); background: rgba(255, 255, 255, 0.2); }
 }
 
 .joystick.active {
   background: rgba(255, 255, 255, 0.2);
   border-color: rgba(255, 255, 255, 0.5);
   transform: scale(1.05);
+  animation: joystickActive 0.3s ease-out;
+  box-shadow: 0 0 20px rgba(76, 175, 80, 0.4);
 }
 
 .joystick-knob {
@@ -49,6 +58,8 @@
 .joystick.active .joystick-knob {
   background: linear-gradient(135deg, #66BB6A, #4CAF50);
   transform: scale(1.1);
+  box-shadow: 0 0 15px rgba(76, 175, 80, 0.6);
+  transition: all 0.15s ease-out;
 }
 
 .touch-instructions {
@@ -172,6 +183,27 @@
 
 .joystick {
   animation: joystickAppear 0.3s ease-out;
+}
+
+/* Animation khi joystick được kích hoạt */
+@keyframes joystickActive {
+  0% {
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(100, 255, 100, 0.5);
+    border-color: rgba(100, 255, 100, 0.8);
+  }
+  100% {
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.6);
+  }
+}
+
+.joystick-active {
+  animation: joystickActive 1.5s infinite;
+  background: rgba(200, 255, 200, 0.4);
 }
 
 /* Pulse animation for instructions */

@@ -63,10 +63,9 @@ const TouchController: React.FC<TouchControllerProps> = ({
     const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
     
     // Giới hạn khoảng cách tối đa (bán kính joystick)
-    const joystickRadius = 50; // Bán kính của joystick
-    const clampedDistance = Math.min(distance, joystickRadius);
+    const clampedDistance = Math.min(distance, maxDistance);
     
-    // Tính toán hướng di chuyển đã chuẩn hóa
+    // Tính toán hướng di chuyển đã chuẩn hóa với độ nhạy cao hơn
     let normalizedX = 0;
     let normalizedY = 0;
     
@@ -76,18 +75,18 @@ const TouchController: React.FC<TouchControllerProps> = ({
     }
     
     // Áp dụng khoảng cách đã giới hạn để có được vector di chuyển cuối cùng
-    const movementX = normalizedX * clampedDistance / joystickRadius;
-    const movementY = normalizedY * clampedDistance / joystickRadius;
+    const movementX = normalizedX * clampedDistance / maxDistance;
+    const movementY = normalizedY * clampedDistance / maxDistance;
     
     // Cập nhật vị trí joystick
     setJoystickPosition({
-      x: movementX * joystickRadius,
-      y: movementY * joystickRadius
+      x: movementX * maxDistance,
+      y: movementY * maxDistance
     });
     
     // Xử lý dead zone (vùng không phản ứng ở giữa joystick)
-    const deadZone = 0.1; // 10% của bán kính
-    const normalizedDistance = clampedDistance / joystickRadius;
+    const deadZone = 0.08; // Giảm dead zone xuống 8% để nhạy hơn
+    const normalizedDistance = clampedDistance / maxDistance;
     
     let finalMovementX = 0;
     let finalMovementY = 0;
@@ -103,24 +102,65 @@ const TouchController: React.FC<TouchControllerProps> = ({
     
     // Chỉ ghi log và gửi dữ liệu khi có chuyển động thực sự
     if (isMoving || Math.abs(finalMovementX) > 0.001 || Math.abs(finalMovementY) > 0.001) {
+      // Tăng độ nhạy của joystick bằng cách nhân với hệ số cao hơn
+      const sensitivityFactor = 4.0; // Tăng độ nhạy lên 400%
+      const enhancedMovementX = finalMovementX * sensitivityFactor;
+      const enhancedMovementY = finalMovementY * sensitivityFactor;
+      
+      // Đảm bảo giá trị không vượt quá 1.0
+      const clampedX = Math.max(-1.0, Math.min(1.0, enhancedMovementX));
+      const clampedY = Math.max(-1.0, Math.min(1.0, enhancedMovementY));
+      
+      // Tính toán thời gian đã trôi qua kể từ khi bắt đầu touch
+      const touchDuration = Date.now() - touchStartTimeRef.current;
+      
+      // Tăng độ nhạy theo thời gian (tối đa 30% sau 2 giây)
+      const durationBoost = Math.min(1.0 + (touchDuration / 6000), 1.3);
+      
+      // Thêm hiệu ứng tăng tốc khi di chuyển gần biên
+      const accelerationFactor = 1.2;
+      const acceleratedX = Math.abs(clampedX) > 0.7 ? clampedX * accelerationFactor * durationBoost : clampedX * durationBoost;
+      const acceleratedY = Math.abs(clampedY) > 0.7 ? clampedY * accelerationFactor * durationBoost : clampedY * durationBoost;
+      
+      // Đảm bảo giá trị sau khi tăng tốc không vượt quá 1.0
+      const finalX = Math.max(-1.0, Math.min(1.0, acceleratedX));
+      const finalY = Math.max(-1.0, Math.min(1.0, acceleratedY));
+      
       console.log('Movement calculated:', { 
-        x: finalMovementX, 
-        y: finalMovementY, 
+        original: { x: finalMovementX, y: finalMovementY },
+        enhanced: { x: enhancedMovementX, y: enhancedMovementY },
+        accelerated: { x: acceleratedX, y: acceleratedY },
+        final: { x: finalX, y: finalY },
         isMoving: isMoving,
         distance: normalizedDistance,
-        deadZone: deadZone
+        deadZone: deadZone,
+        durationBoost: durationBoost
       });
       
-      // Gửi dữ liệu di chuyển đến component cha
-      onMovementChange({ x: finalMovementX, y: -finalMovementY, isMoving: isMoving });
+      // Gửi dữ liệu di chuyển đến component cha với độ nhạy đã tăng và giới hạn
+      onMovementChange({ x: finalX, y: finalY, isMoving: isMoving });
+      
+      // Thêm hiệu ứng phát sáng cho knob dựa trên cường độ
+      if (knobRef.current) {
+        const glowIntensity = Math.min(0.4 + normalizedDistance * 0.6, 1.0);
+        knobRef.current.style.boxShadow = `0 0 ${15 * glowIntensity}px rgba(76, 175, 80, ${0.6 * glowIntensity})`;
+      }
+    } else if (knobRef.current) {
+      // Reset glow effect when not moving
+      knobRef.current.style.boxShadow = '';
     }
-  }, [onMovementChange]);
+  }, [onMovementChange, maxDistance]);
 
   // Thêm state để theo dõi mouse down
   const [isMouseDown, setIsMouseDown] = useState(false);
+  // Thêm ref để theo dõi thời gian bắt đầu touch
+  const touchStartTimeRef = useRef<number>(0);
 
   const handleTouchStart = useCallback((e: TouchEvent) => {
     e.preventDefault();
+    
+    // Ghi lại thời gian bắt đầu touch để tính toán độ nhạy dựa trên thời gian
+    touchStartTimeRef.current = Date.now();
     
     console.log('Touch start event received', { touches: e.touches.length });
     
@@ -140,6 +180,14 @@ const TouchController: React.FC<TouchControllerProps> = ({
     const joystickCenterX = joystickRect.left + joystickRect.width / 2;
     const joystickCenterY = joystickRect.top + joystickRect.height / 2;
     
+    // Đặt joystick ở trạng thái active và hiển thị rõ ràng
+    setIsActive(true);
+    
+    // Thêm class animation cho joystick khi được kích hoạt
+    if (joystickElement) {
+      joystickElement.classList.add('joystick-active');
+    }
+    
     console.log('Joystick position:', { 
       left: joystickRect.left, 
       top: joystickRect.top, 
@@ -150,8 +198,8 @@ const TouchController: React.FC<TouchControllerProps> = ({
     });
     
     // Tăng bán kính phát hiện joystick để dễ sử dụng hơn
-    const extendedRadius = 200; // Tăng bán kính phát hiện lên 200px
-    
+    const extendedRadius = 350; // Tăng bán kính phát hiện lên 350px để dễ dàng bắt được touch
+
     // Ưu tiên xử lý touch đầu tiên cho di chuyển nếu chưa có movement touch
     if (!movementTouch && e.touches.length > 0) {
       const firstTouch = e.touches[0];
@@ -364,7 +412,46 @@ const TouchController: React.FC<TouchControllerProps> = ({
         });
         
         // Update movement sử dụng giá trị absolute và trung tâm joystick
-        updateMovement(moveTouch.clientX, moveTouch.clientY, movementTouch.startX, movementTouch.startY);
+        // Đảm bảo sử dụng đúng tọa độ trung tâm của joystick
+        const joystickElement = joystickRef.current;
+        if (joystickElement) {
+          const joystickRect = joystickElement.getBoundingClientRect();
+          const joystickCenterX = joystickRect.left + joystickRect.width / 2;
+          const joystickCenterY = joystickRect.top + joystickRect.height / 2;
+          
+          // Đảm bảo joystick được kích hoạt và thêm class animation
+          setIsActive(true);
+          joystickElement.classList.add('joystick-active');
+          
+          // Tính toán khoảng cách từ trung tâm joystick đến vị trí touch hiện tại
+          const deltaX = moveTouch.clientX - joystickCenterX;
+          const deltaY = moveTouch.clientY - joystickCenterY;
+          const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+          
+          // Tính toán thời gian đã trôi qua kể từ khi bắt đầu touch
+          const touchDuration = Date.now() - touchStartTimeRef.current;
+          
+          // Tăng độ nhạy theo thời gian và khoảng cách
+          // Sau 300ms sẽ bắt đầu tăng độ nhạy, tối đa 30% sau 2 giây
+          const durationBoost = Math.min(1.0 + (touchDuration / 6000), 1.3);
+          
+          // Tăng độ nhạy khi di chuyển gần rìa joystick (tăng thêm 20%)
+          const edgeBoost = distance > joystickRadius * 0.7 ? 1.2 : 1.0;
+          
+          console.log('Touch movement boost factors:', {
+            touchDuration,
+            durationBoost,
+            distance,
+            edgeBoost,
+            totalBoost: durationBoost * edgeBoost
+          });
+          
+          // Cập nhật movement với độ nhạy cao và boost theo thời gian và khoảng cách
+          updateMovement(moveTouch.clientX, moveTouch.clientY, joystickCenterX, joystickCenterY);
+        } else {
+          // Fallback nếu không tìm thấy joystick element
+          updateMovement(moveTouch.clientX, moveTouch.clientY, movementTouch.startX, movementTouch.startY);
+        }
         
         // Cập nhật vị trí hiện tại của touch
         setMovementTouch(prev => {
@@ -458,6 +545,17 @@ const TouchController: React.FC<TouchControllerProps> = ({
       // Gửi dữ liệu di chuyển với isMoving = false để dừng avatar
       // Chỉ gửi một lần khi kết thúc chuyển động
       onMovementChange({ x: 0, y: 0, isMoving: false });
+      
+      // Xóa class animation khi touch kết thúc
+      const joystickElement = joystickRef.current;
+      if (joystickElement) {
+        joystickElement.classList.remove('joystick-active');
+      }
+      
+      // Reset hiệu ứng glow cho knob
+      if (knobRef.current) {
+        knobRef.current.style.boxShadow = '';
+      }
     }
     
     // Xử lý kết thúc touch xoay

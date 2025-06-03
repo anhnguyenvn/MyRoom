@@ -325,10 +325,20 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                 if (activeMovement.right) { moveDirection.addInPlace(cameraRight); isMoving = true; }
                 if (activeMovement.left) { moveDirection.subtractInPlace(cameraRight); isMoving = true; }
 
-                // Xử lý di chuyển từ touch
+                // Xử lý di chuyển từ touch với độ nhạy cao hơn và phản hồi tốt hơn
                 if (touchMovement) {
-                    // Kiểm tra xem có dữ liệu di chuyển không, bất kể isMoving
-                    const hasTouchMovement = Math.abs(touchMovement.x) > 0.001 || Math.abs(touchMovement.y) > 0.001;
+                    // Giảm ngưỡng phát hiện chuyển động để tăng độ nhạy
+                    const hasTouchMovement = Math.abs(touchMovement.x) > 0.0003 || Math.abs(touchMovement.y) > 0.0003;
+                    
+                    // Khởi tạo metadata nếu chưa có
+                    if (!avatarRootRef.current.metadata) {
+                        avatarRootRef.current.metadata = { 
+                            previousMoveDirection: Vector3.Zero(),
+                            touchStartTime: Date.now(),
+                            lastMoveTime: Date.now(),
+                            smoothedMagnitude: 0
+                        };
+                    }
                     
                     if (hasTouchMovement || touchMovement.isMoving) {
                         // Chỉ ghi log khi có chuyển động thực sự
@@ -336,19 +346,138 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                         
                         const touchMoveDirection = Vector3.Zero();
                         
-                        // Đảo ngược y để phù hợp với hướng di chuyển
-                        touchMoveDirection.addInPlace(cameraDirection.scale(-touchMovement.y));
-                        touchMoveDirection.addInPlace(cameraRight.scale(touchMovement.x));
+                        // Tính toán cường độ di chuyển tổng thể
+                        const moveMagnitude = Math.sqrt(touchMovement.x * touchMovement.x + touchMovement.y * touchMovement.y);
+                        
+                        // Làm mượt cường độ di chuyển
+                        if (!avatarRootRef.current.metadata.smoothedMagnitude) {
+                            avatarRootRef.current.metadata.smoothedMagnitude = moveMagnitude;
+                        } else {
+                            const magnitudeSmoothFactor = 0.7;
+                            avatarRootRef.current.metadata.smoothedMagnitude = 
+                                avatarRootRef.current.metadata.smoothedMagnitude * (1 - magnitudeSmoothFactor) + 
+                                moveMagnitude * magnitudeSmoothFactor;
+                        }
+                        
+                        const smoothedMagnitude = avatarRootRef.current.metadata.smoothedMagnitude;
+                        
+                        // Tăng hệ số di chuyển lên 6.5 (từ 6.0) để đảm bảo avatar di chuyển rõ ràng hơn
+                        const movementMultiplier = 6.5;
+                        
+                        // Thêm hiệu ứng tăng tốc khi di chuyển mạnh với ngưỡng thấp hơn
+                        const boostThreshold = 0.55; // Giảm ngưỡng từ 0.6 xuống 0.55
+                        const boostMultiplier = smoothedMagnitude > boostThreshold ? 1.6 : 1.0; // Tăng hệ số từ 1.5 lên 1.6
+                        
+                        // Đảm bảo thời gian bắt đầu touch được thiết lập
+                        if (!avatarRootRef.current.metadata.touchStartTime) {
+                            avatarRootRef.current.metadata.touchStartTime = Date.now();
+                        }
+                        
+                        // Cập nhật thời gian di chuyển cuối cùng
+                        avatarRootRef.current.metadata.lastMoveTime = Date.now();
+                        
+                        // Tính toán thời gian đã giữ
+                        const touchDuration = Date.now() - avatarRootRef.current.metadata.touchStartTime;
+                        // Tăng hệ số dựa trên thời gian giữ (tối đa 60% sau 2 giây)
+                        const durationBoost = Math.min(1.0 + (touchDuration / 3500), 1.6);
+                        
+                        // Tính toán hệ số tăng tốc dựa trên cường độ di chuyển
+                        const forwardBoost = Math.abs(touchMovement.y) > boostThreshold ? boostMultiplier : 1.0;
+                        const sideBoost = Math.abs(touchMovement.x) > boostThreshold ? boostMultiplier : 1.0;
+                        
+                        // Áp dụng hệ số di chuyển và tăng tốc với hệ số thời gian
+                        const finalForwardMovement = -touchMovement.y * movementMultiplier * forwardBoost * durationBoost;
+                        const finalSideMovement = touchMovement.x * movementMultiplier * sideBoost * durationBoost;
+                        
+                        console.log('Applying movement with enhanced values:', { 
+                            forwardBackward: finalForwardMovement,
+                            leftRight: finalSideMovement,
+                            forwardBoost: forwardBoost,
+                            sideBoost: sideBoost,
+                            durationBoost: durationBoost,
+                            magnitude: moveMagnitude,
+                            smoothedMagnitude: smoothedMagnitude,
+                            touchDuration: touchDuration
+                        });
+                        
+                        touchMoveDirection.addInPlace(cameraDirection.scale(finalForwardMovement));
+                        touchMoveDirection.addInPlace(cameraRight.scale(finalSideMovement));
                         
                         // Luôn xử lý chuyển động nếu có dữ liệu
                         moveDirection.addInPlace(touchMoveDirection);
                         isMoving = true;
+                        
+                        // Xác định nếu nên chạy dựa trên cường độ di chuyển và thời gian
+                        if (smoothedMagnitude > 0.75 && durationBoost > 1.4 && !activeMovement.run) {
+                            // Tự động chuyển sang chạy khi di chuyển nhanh và đủ lâu
+                            activeMovement.run = true;
+                        }
+                    } else {
+                        // Kiểm tra thời gian kể từ lần di chuyển cuối cùng
+                        const timeSinceLastMove = Date.now() - (avatarRootRef.current.metadata.lastMoveTime || 0);
+                        
+                        // Áp dụng hiệu ứng dừng mượt mà trong 300ms đầu tiên sau khi dừng di chuyển
+                        if (timeSinceLastMove < 300 && avatarRootRef.current.metadata.previousMoveDirection) {
+                            const prevDirection = avatarRootRef.current.metadata.previousMoveDirection;
+                            
+                            // Giảm dần vận tốc
+                            const stopSmoothFactor = 0.85;
+                            prevDirection.scaleInPlace(stopSmoothFactor);
+                            
+                            // Nếu vận tốc vẫn đủ lớn, tiếp tục di chuyển
+                            if (prevDirection.lengthSquared() > 0.001) {
+                                // Áp dụng chuyển động dừng dần
+                                moveDirection.addInPlace(prevDirection.scale(deltaTime));
+                                isMoving = true;
+                            }
+                        }
+                        
+                        // Reset thời gian bắt đầu di chuyển khi không có chuyển động
+                        if (timeSinceLastMove > 500) {
+                            avatarRootRef.current.metadata.touchStartTime = null;
+                            avatarRootRef.current.metadata.smoothedMagnitude = 0;
+                            
+                            // Đảm bảo tắt chế độ chạy khi dừng lâu
+                            activeMovement.run = false;
+                        }
                     }
                 }
 
                 if (isMoving && moveDirection.lengthSquared() > 0.001) {
-                    moveDirection.normalize().scaleInPlace(currentSpeed * deltaTime);
-                    avatarRootRef.current.position.addInPlace(moveDirection);
+                    // Chuẩn hóa vector di chuyển
+                    moveDirection.normalize();
+                    
+                    // Áp dụng hệ số làm mượt chuyển động
+                    const smoothFactor = 0.8;
+                    
+                    // Lưu trữ hướng di chuyển trước đó nếu chưa có
+                    if (!avatarRootRef.current.metadata) {
+                        avatarRootRef.current.metadata = { previousMoveDirection: Vector3.Zero() };
+                    }
+                    
+                    // Lấy hướng di chuyển trước đó
+                    const prevDirection = avatarRootRef.current.metadata.previousMoveDirection || Vector3.Zero();
+                    
+                    // Tính toán hướng di chuyển mới với hệ số làm mượt
+                    const smoothedDirection = new Vector3(
+                        prevDirection.x * (1 - smoothFactor) + moveDirection.x * smoothFactor,
+                        prevDirection.y * (1 - smoothFactor) + moveDirection.y * smoothFactor,
+                        prevDirection.z * (1 - smoothFactor) + moveDirection.z * smoothFactor
+                    );
+                    
+                    // Chuẩn hóa lại vector sau khi làm mượt
+                    if (smoothedDirection.lengthSquared() > 0.001) {
+                        smoothedDirection.normalize();
+                    }
+                    
+                    // Lưu lại hướng di chuyển hiện tại cho lần sau
+                    avatarRootRef.current.metadata.previousMoveDirection = smoothedDirection.clone();
+                    
+                    // Áp dụng tốc độ và delta time
+                    smoothedDirection.scaleInPlace(currentSpeed * deltaTime);
+                    
+                    // Cập nhật vị trí avatar
+                    avatarRootRef.current.position.addInPlace(smoothedDirection);
 
                     // Xoay avatar theo hướng di chuyển
                     if (moveDirection.lengthSquared() > 0.001) {
