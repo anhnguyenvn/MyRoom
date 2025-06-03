@@ -32,6 +32,7 @@ export interface TouchMovement {
     x: number;
     y: number;
     isMoving: boolean;
+    durationBoost?: number; // Thêm thông tin về boost dựa trên thời gian chạm
 }
 
 export interface TouchRotation {
@@ -376,10 +377,16 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                         // Cập nhật thời gian di chuyển cuối cùng
                         avatarRootRef.current.metadata.lastMoveTime = Date.now();
                         
-                        // Tính toán thời gian đã giữ
-                        const touchDuration = Date.now() - avatarRootRef.current.metadata.touchStartTime;
-                        // Tăng hệ số dựa trên thời gian giữ (tối đa 60% sau 2 giây)
-                        const durationBoost = Math.min(1.0 + (touchDuration / 3500), 1.6);
+                        // Sử dụng durationBoost từ TouchController nếu có, nếu không thì tính toán
+                        let durationBoost = touchMovement.durationBoost || 1.0;
+                        
+                        // Nếu không có durationBoost từ TouchController, tính toán dựa trên thời gian
+                        if (!touchMovement.durationBoost) {
+                            // Tính toán thời gian đã giữ
+                            const touchDuration = Date.now() - avatarRootRef.current.metadata.touchStartTime;
+                            // Tăng hệ số dựa trên thời gian giữ (tối đa 60% sau 2 giây)
+                            durationBoost = Math.min(1.0 + (touchDuration / 3500), 1.6);
+                        }
                         
                         // Tính toán hệ số tăng tốc dựa trên cường độ di chuyển
                         const forwardBoost = Math.abs(touchMovement.y) > boostThreshold ? boostMultiplier : 1.0;
@@ -395,9 +402,11 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                             forwardBoost: forwardBoost,
                             sideBoost: sideBoost,
                             durationBoost: durationBoost,
+                            durationBoostSource: touchMovement.durationBoost ? 'TouchController' : 'BabylonScene',
                             magnitude: moveMagnitude,
                             smoothedMagnitude: smoothedMagnitude,
-                            touchDuration: touchDuration
+                            touchDuration: touchMovement.durationBoost ? 'Using TouchController value' : 
+                                (Date.now() - avatarRootRef.current.metadata.touchStartTime) + 'ms'
                         });
                         
                         touchMoveDirection.addInPlace(cameraDirection.scale(finalForwardMovement));
@@ -408,7 +417,8 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                         isMoving = true;
                         
                         // Xác định nếu nên chạy dựa trên cường độ di chuyển và thời gian
-                        if (smoothedMagnitude > 0.75 && durationBoost > 1.4 && !activeMovement.run) {
+                        // Giảm ngưỡng durationBoost để dễ dàng kích hoạt chạy hơn
+                        if (smoothedMagnitude > 0.7 && durationBoost > 1.3 && !activeMovement.run) {
                             // Tự động chuyển sang chạy khi di chuyển nhanh và đủ lâu
                             activeMovement.run = true;
                         }

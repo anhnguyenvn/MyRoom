@@ -85,7 +85,7 @@ const TouchController: React.FC<TouchControllerProps> = ({
     });
     
     // Xử lý dead zone (vùng không phản ứng ở giữa joystick)
-    const deadZone = 0.08; // Giảm dead zone xuống 8% để nhạy hơn
+    const deadZone = 0.05; // Giảm dead zone xuống 5% để nhạy hơn
     const normalizedDistance = clampedDistance / maxDistance;
     
     let finalMovementX = 0;
@@ -101,9 +101,9 @@ const TouchController: React.FC<TouchControllerProps> = ({
     }
     
     // Chỉ ghi log và gửi dữ liệu khi có chuyển động thực sự
-    if (isMoving || Math.abs(finalMovementX) > 0.001 || Math.abs(finalMovementY) > 0.001) {
+    if (isMoving || Math.abs(finalMovementX) > 0.0005 || Math.abs(finalMovementY) > 0.0005) {
       // Tăng độ nhạy của joystick bằng cách nhân với hệ số cao hơn
-      const sensitivityFactor = 4.0; // Tăng độ nhạy lên 400%
+      const sensitivityFactor = 5.0; // Tăng độ nhạy lên 500%
       const enhancedMovementX = finalMovementX * sensitivityFactor;
       const enhancedMovementY = finalMovementY * sensitivityFactor;
       
@@ -114,13 +114,14 @@ const TouchController: React.FC<TouchControllerProps> = ({
       // Tính toán thời gian đã trôi qua kể từ khi bắt đầu touch
       const touchDuration = Date.now() - touchStartTimeRef.current;
       
-      // Tăng độ nhạy theo thời gian (tối đa 30% sau 2 giây)
-      const durationBoost = Math.min(1.0 + (touchDuration / 6000), 1.3);
+      // Tăng độ nhạy theo thời gian (tối đa 50% sau 2 giây)
+      const durationBoost = Math.min(1.0 + (touchDuration / 4000), 1.5);
       
       // Thêm hiệu ứng tăng tốc khi di chuyển gần biên
-      const accelerationFactor = 1.2;
-      const acceleratedX = Math.abs(clampedX) > 0.7 ? clampedX * accelerationFactor * durationBoost : clampedX * durationBoost;
-      const acceleratedY = Math.abs(clampedY) > 0.7 ? clampedY * accelerationFactor * durationBoost : clampedY * durationBoost;
+      const accelerationFactor = 1.3;
+      const edgeThreshold = 0.6; // Giảm ngưỡng để kích hoạt tăng tốc sớm hơn
+      const acceleratedX = Math.abs(clampedX) > edgeThreshold ? clampedX * accelerationFactor * durationBoost : clampedX * durationBoost;
+      const acceleratedY = Math.abs(clampedY) > edgeThreshold ? clampedY * accelerationFactor * durationBoost : clampedY * durationBoost;
       
       // Đảm bảo giá trị sau khi tăng tốc không vượt quá 1.0
       const finalX = Math.max(-1.0, Math.min(1.0, acceleratedX));
@@ -138,16 +139,24 @@ const TouchController: React.FC<TouchControllerProps> = ({
       });
       
       // Gửi dữ liệu di chuyển đến component cha với độ nhạy đã tăng và giới hạn
-      onMovementChange({ x: finalX, y: finalY, isMoving: isMoving });
+      onMovementChange({ 
+        x: finalX, 
+        y: finalY, 
+        isMoving: true, // Luôn đặt isMoving = true khi có chuyển động
+        durationBoost: durationBoost // Thêm thông tin về boost để BabylonScene có thể sử dụng
+      });
       
       // Thêm hiệu ứng phát sáng cho knob dựa trên cường độ
       if (knobRef.current) {
-        const glowIntensity = Math.min(0.4 + normalizedDistance * 0.6, 1.0);
-        knobRef.current.style.boxShadow = `0 0 ${15 * glowIntensity}px rgba(76, 175, 80, ${0.6 * glowIntensity})`;
+        const glowIntensity = Math.min(0.4 + normalizedDistance * 0.8, 1.0);
+        const glowColor = normalizedDistance > 0.7 ? '76, 255, 80' : '76, 175, 80';
+        knobRef.current.style.boxShadow = `0 0 ${20 * glowIntensity}px rgba(${glowColor}, ${0.7 * glowIntensity})`;
       }
     } else if (knobRef.current) {
       // Reset glow effect when not moving
       knobRef.current.style.boxShadow = '';
+      // Gửi dữ liệu di chuyển với isMoving = false để dừng avatar
+      onMovementChange({ x: 0, y: 0, isMoving: false });
     }
   }, [onMovementChange, maxDistance]);
 
@@ -432,11 +441,11 @@ const TouchController: React.FC<TouchControllerProps> = ({
           const touchDuration = Date.now() - touchStartTimeRef.current;
           
           // Tăng độ nhạy theo thời gian và khoảng cách
-          // Sau 300ms sẽ bắt đầu tăng độ nhạy, tối đa 30% sau 2 giây
-          const durationBoost = Math.min(1.0 + (touchDuration / 6000), 1.3);
+          // Sau 300ms sẽ bắt đầu tăng độ nhạy, tối đa 50% sau 2 giây
+          const durationBoost = Math.min(1.0 + (touchDuration / 4000), 1.5);
           
-          // Tăng độ nhạy khi di chuyển gần rìa joystick (tăng thêm 20%)
-          const edgeBoost = distance > joystickRadius * 0.7 ? 1.2 : 1.0;
+          // Tăng độ nhạy khi di chuyển gần rìa joystick (tăng thêm 30%)
+          const edgeBoost = distance > joystickRadius * 0.6 ? 1.3 : 1.0;
           
           console.log('Touch movement boost factors:', {
             touchDuration,
