@@ -55,12 +55,14 @@ const TouchController: React.FC<TouchControllerProps> = ({
   const maxDistance = joystickRadius - knobRadius;
 
   const updateMovement = useCallback((currentX: number, currentY: number, centerX: number, centerY: number) => {
+    console.log('updateMovement called with:', { currentX, currentY, centerX, centerY });
     // Tính toán vector di chuyển từ trung tâm joystick đến vị trí touch
     const deltaX = currentX - centerX;
     const deltaY = currentY - centerY;
     
     // Tính toán khoảng cách từ trung tâm
     const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+    console.log('Movement calculation:', { deltaX, deltaY, distance, maxDistance });
     
     // Giới hạn khoảng cách tối đa (bán kính joystick)
     const clampedDistance = Math.min(distance, maxDistance);
@@ -139,6 +141,7 @@ const TouchController: React.FC<TouchControllerProps> = ({
       });
       
       // Gửi dữ liệu di chuyển đến component cha với độ nhạy đã tăng và giới hạn
+      console.log('Calling onMovementChange with:', { x: finalX, y: finalY, isMoving: true, durationBoost });
       onMovementChange({ 
         x: finalX, 
         y: finalY, 
@@ -156,6 +159,7 @@ const TouchController: React.FC<TouchControllerProps> = ({
       // Reset glow effect when not moving
       knobRef.current.style.boxShadow = '';
       // Gửi dữ liệu di chuyển với isMoving = false để dừng avatar
+      console.log('Calling onMovementChange with reset values:', { x: 0, y: 0, isMoving: false });
       onMovementChange({ x: 0, y: 0, isMoving: false });
     }
   }, [onMovementChange, maxDistance]);
@@ -172,6 +176,7 @@ const TouchController: React.FC<TouchControllerProps> = ({
     touchStartTimeRef.current = Date.now();
     
     console.log('Touch start event received', { touches: e.touches.length });
+    console.log('onMovementChange function:', onMovementChange);
     
     if (e.touches.length === 0) {
       console.warn('No touches in touch start event');
@@ -300,6 +305,9 @@ const TouchController: React.FC<TouchControllerProps> = ({
 
   // Thêm mouse handlers
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    console.log('Mouse down on joystick detected!');
+    
     // Lấy vị trí của joystick element
     const joystickRect = joystickRef.current?.getBoundingClientRect();
     if (!joystickRect) return;
@@ -348,6 +356,7 @@ const TouchController: React.FC<TouchControllerProps> = ({
         currentY: clickY
       });
       
+      console.log('Mouse down position:', { deltaX: clickX - joystickCenterX, deltaY: clickY - joystickCenterY });
       updateMovement(clickX, clickY, joystickCenterX, joystickCenterY);
     }
   }, [updateMovement]);
@@ -661,6 +670,45 @@ const TouchController: React.FC<TouchControllerProps> = ({
             transform: `translate(${joystickPosition.x}px, ${joystickPosition.y}px)`
           }}
         />
+      </div>
+      
+      {/* Test button để kiểm tra onMovementChange */}
+      <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 1000, pointerEvents: 'auto' }}>
+        <button 
+          onClick={() => {
+            console.log('Test button clicked - sending movement data');
+            onMovementChange({ x: 0.5, y: 0.5, isMoving: true, durationBoost: 1.0 });
+          }}
+          style={{
+            padding: '10px',
+            backgroundColor: '#ff6b6b',
+            color: 'white',
+            border: 'none',
+            borderRadius: '5px',
+            cursor: 'pointer',
+            pointerEvents: 'auto'
+          }}
+        >
+          Test Movement
+        </button>
+        <button 
+          onClick={() => {
+            console.log('Test button clicked - sending reset data');
+            onMovementChange({ x: 0, y: 0, isMoving: false });
+          }}
+          style={{
+            padding: '10px',
+            backgroundColor: '#4ecdc4',
+            color: 'white',
+            border: 'none',
+            borderRadius: '5px',
+            cursor: 'pointer',
+            marginLeft: '5px',
+            pointerEvents: 'auto'
+          }}
+        >
+          Reset
+        </button>
       </div>
       
       {/* <div className="touch-instructions">

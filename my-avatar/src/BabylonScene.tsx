@@ -60,6 +60,9 @@ export interface BabylonSceneHandle {
 const rotationMatrix = new Matrix(); // Khai báo ở ngoài để tái sử dụng
 
 const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ modelsToLoad, activeMovement, touchMovement, touchRotation }, ref) => {
+    // Debug: Log touchMovement prop ngay khi component nhận được
+    console.log('BabylonScene received touchMovement prop:', touchMovement);
+    
     const reactCanvas = useRef<HTMLCanvasElement>(null);
     const engineRef = useRef<Nullable<Engine>>(null);
     const sceneRef = useRef<Nullable<Scene>>(null);
