@@ -639,14 +639,14 @@ const TouchController: React.FC<TouchControllerProps> = ({
     }
   }, [onActionChange]);
 
-  console.log('TouchController render - isVisible:', isVisible);
+  
   
   if (!isVisible) {
-    console.log('TouchController not visible, returning null');
+  
     return null;
   }
 
-  console.log('TouchController rendering...');
+  
   return (
     <div ref={containerRef} className="touch-controller">
       <div 
@@ -663,7 +663,7 @@ const TouchController: React.FC<TouchControllerProps> = ({
         />
       </div>
       
-      <div className="touch-instructions">
+      {/* <div className="touch-instructions">
         <div className="instruction-item">
           <div className="instruction-icon joystick-icon">🕹️</div>
           <span>Di chuyển</span>
@@ -672,7 +672,7 @@ const TouchController: React.FC<TouchControllerProps> = ({
           <div className="instruction-icon touch-icon">👆</div>
           <span>Chạm để xoay</span>
         </div>
-      </div>
+      </div> */}
 
       {/* Action buttons */}
       <div className="avatar-actions">

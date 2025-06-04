@@ -67,6 +67,15 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
     const avatarRootRef = useRef<Nullable<TransformNode>>(null);
     const loadedPartsRef = useRef<Record<string, LoadedPartEntry>>({});
     const [isInspectorVisible, setIsInspectorVisible] = useState(false);
+    const [debugTouchMovement, setDebugTouchMovement] = useState<TouchMovement>({ x: 0, y: 0, isMoving: false });
+    const [debugBabylonProcessing, setDebugBabylonProcessing] = useState({
+        moveMagnitude: 0,
+        smoothedMagnitude: 0,
+        finalForwardMovement: 0,
+        finalSideMovement: 0,
+        durationBoost: 0,
+        isProcessing: false
+    });
 
     const idleAnimRef = useRef<Nullable<AnimationGroup>>(null);
     const walkAnimRef = useRef<Nullable<AnimationGroup>>(null);
@@ -283,7 +292,10 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
             cameraTargetNode.position.copyFrom(defaultCameraTargetOffset);
 
             const camera = new ArcRotateCamera("camera", defaultCameraAlpha, defaultCameraBeta, defaultCameraRadius, cameraTargetNode.position, babylonScene);
-            camera.attachControl(reactCanvas.current, false);
+            camera.attachControl(reactCanvas.current, true); // noPreventDefault = true để tránh xung đột với TouchController
+            
+            // Tắt touch input cho camera để tránh xung đột với TouchController
+            camera.inputs.removeByType("ArcRotateCameraPointersInput");
             camera.lowerRadiusLimit = 0.5; camera.upperRadiusLimit = 10;
             camera.wheelDeltaPercentage = 0.01; camera.minZ = 0.1;
             camera.lowerBetaLimit = Math.PI * 0.1; camera.upperBetaLimit = Math.PI * 0.9;
@@ -307,6 +319,12 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
 
             const sceneObserver = babylonScene.onBeforeRenderObservable.add(() => {
                 if (!avatarRootRef.current || !engineRef.current) return;
+                
+                // Log để debug khi onBeforeRenderObservable được gọi
+                if (touchMovement && (touchMovement.isMoving || Math.abs(touchMovement.x) > 0.001 || Math.abs(touchMovement.y) > 0.001)) {
+                    console.log('onBeforeRenderObservable called with touchMovement:', touchMovement);
+                }
+                
                 const deltaTime = engineRef.current.getDeltaTime() / 1000.0;
                 let isMoving = false;
                 const moveDirection = Vector3.Zero();
@@ -326,6 +344,7 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                 if (activeMovement.right) { moveDirection.addInPlace(cameraRight); isMoving = true; }
                 if (activeMovement.left) { moveDirection.subtractInPlace(cameraRight); isMoving = true; }
 
+                console.log('XXX movement:', touchMovement?.x);
                 // Xử lý di chuyển từ touch với độ nhạy cao hơn và phản hồi tốt hơn
                 if (touchMovement) {
                     // Giảm ngưỡng phát hiện chuyển động để tăng độ nhạy
@@ -396,6 +415,19 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                         const finalForwardMovement = -touchMovement.y * movementMultiplier * forwardBoost * durationBoost;
                         const finalSideMovement = touchMovement.x * movementMultiplier * sideBoost * durationBoost;
                         
+                        // Cập nhật debug info cho BabylonScene processing
+                        setDebugBabylonProcessing({
+                            moveMagnitude: moveMagnitude,
+                            smoothedMagnitude: smoothedMagnitude,
+                            finalForwardMovement: finalForwardMovement,
+                            finalSideMovement: finalSideMovement,
+                            durationBoost: durationBoost,
+                            isProcessing: true
+                        });
+                        
+                        // Log để debug khi xử lý touchMovement
+                    console.log('Processing touchMovement in onBeforeRenderObservable');
+                        
                         console.log('Applying movement with enhanced values:', { 
                             forwardBackward: finalForwardMovement,
                             leftRight: finalSideMovement,
@@ -423,6 +455,9 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                             activeMovement.run = true;
                         }
                     } else {
+                        // Reset debug info khi không có chuyển động
+                        setDebugBabylonProcessing(prev => ({ ...prev, isProcessing: false }));
+                        
                         // Kiểm tra thời gian kể từ lần di chuyển cuối cùng
                         const timeSinceLastMove = Date.now() - (avatarRootRef.current.metadata.lastMoveTime || 0);
                         
@@ -575,12 +610,35 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                 }
             });
 
-            babylonEngine.runRenderLoop(() => sceneRef.current?.render());
+            // Đảm bảo render loop luôn chạy
+            babylonEngine.runRenderLoop(() => {
+                if (sceneRef.current) {
+                    sceneRef.current.render();
+                }
+            });
+            
+            // Thêm listener để đảm bảo render loop không bị dừng
+            const ensureRenderLoop = () => {
+                if (engineRef.current && !engineRef.current.isDisposed) {
+                    if (!engineRef.current._renderingQueueLaunched) {
+                        console.log('Restarting render loop');
+                        engineRef.current.runRenderLoop(() => {
+                            if (sceneRef.current) {
+                                sceneRef.current.render();
+                            }
+                        });
+                    }
+                }
+            };
+            
+            // Kiểm tra render loop mỗi 100ms
+            const renderLoopChecker = setInterval(ensureRenderLoop, 100);
             const resize = () => babylonEngine.resize();
             window.addEventListener('resize', resize);
 
             return () => {
                 window.removeEventListener('resize', resize);
+                clearInterval(renderLoopChecker);
                 babylonScene.onBeforeRenderObservable.remove(sceneObserver);
                 if (sceneRef.current && isInspectorVisible) sceneRef.current.debugLayer.hide();
                 avatarRootRef.current?.dispose(false, true); avatarRootRef.current = null;
@@ -630,12 +688,66 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
         });
     }, [modelsToLoad]);
 
+    // Cập nhật debug touchMovement
+    useEffect(() => {
+        if (touchMovement) {
+            setDebugTouchMovement(touchMovement);
+        }
+    }, [touchMovement]);
+
     return (
-        <canvas 
-            ref={reactCanvas} 
-            style={{ width: '100%', height: '100%', touchAction: 'none', outline: 'none' }}
-            tabIndex={0}
-        />
+        <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+            <canvas 
+                ref={reactCanvas} 
+                style={{ width: '100%', height: '100%', touchAction: 'none', outline: 'none' }}
+                tabIndex={0}
+            />
+            {/* Debug overlay hiển thị touchMovement từ TouchController */}
+            <div style={{
+                position: 'absolute',
+                top: '10px',
+                left: '10px',
+                backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                color: 'white',
+                padding: '10px',
+                borderRadius: '5px',
+                fontFamily: 'monospace',
+                fontSize: '12px',
+                zIndex: 1000,
+                pointerEvents: 'none'
+            }}>
+                <div style={{ color: '#00ff00', fontWeight: 'bold' }}>TouchController Input:</div>
+                <div>X: {debugTouchMovement.x.toFixed(3)}</div>
+                <div>Y: {debugTouchMovement.y.toFixed(3)}</div>
+                <div>IsMoving: {debugTouchMovement.isMoving ? 'true' : 'false'}</div>
+                {debugTouchMovement.durationBoost && (
+                    <div>DurationBoost: {debugTouchMovement.durationBoost.toFixed(2)}</div>
+                )}
+            </div>
+            
+            {/* Debug overlay hiển thị xử lý trong BabylonScene */}
+            <div style={{
+                position: 'absolute',
+                top: '10px',
+                right: '10px',
+                backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                color: 'white',
+                padding: '10px',
+                borderRadius: '5px',
+                fontFamily: 'monospace',
+                fontSize: '12px',
+                zIndex: 1000,
+                pointerEvents: 'none'
+            }}>
+                <div style={{ color: '#ff6600', fontWeight: 'bold' }}>BabylonScene Processing:</div>
+                <div>IsProcessing: {debugBabylonProcessing.isProcessing ? 'true' : 'false'}</div>
+                <div>MoveMagnitude: {debugBabylonProcessing.moveMagnitude.toFixed(3)}</div>
+                <div>SmoothedMag: {debugBabylonProcessing.smoothedMagnitude.toFixed(3)}</div>
+                <div>FinalForward: {debugBabylonProcessing.finalForwardMovement.toFixed(3)}</div>
+                <div>FinalSide: {debugBabylonProcessing.finalSideMovement.toFixed(3)}</div>
+                <div>DurationBoost: {debugBabylonProcessing.durationBoost.toFixed(2)}</div>
+            </div>
+        </div>
     );
 });
 

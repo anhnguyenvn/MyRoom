@@ -11,13 +11,13 @@
 
 .joystick {
   position: absolute;
-  bottom: 80px;
+  bottom: 40px;
   left: 80px;
   width: 100px;
   height: 100px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
-  border: 3px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.15);
+  border: 3px solid rgba(255, 255, 255, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -31,14 +31,14 @@
 }
 
 @keyframes joystickActive {
-  0% { transform: scale(1.0); background: rgba(255, 255, 255, 0.3); }
-  50% { transform: scale(1.08); background: rgba(255, 255, 255, 0.25); }
-  100% { transform: scale(1.05); background: rgba(255, 255, 255, 0.2); }
+  0% { transform: scale(1.0); background: rgba(255, 255, 255, 0.15); }
+  50% { transform: scale(1.08); background: rgba(255, 255, 255, 0.12); }
+  100% { transform: scale(1.05); background: rgba(255, 255, 255, 0.1); }
 }
 
 .joystick.active {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.25);
   transform: scale(1.05);
   animation: joystickActive 0.3s ease-out;
   box-shadow: 0 0 20px rgba(76, 175, 80, 0.4);
@@ -110,7 +110,7 @@
 /* Mobile optimizations */
 @media (max-width: 768px) {
   .joystick {
-    bottom: 60px;
+    bottom: 20px;
     left: 60px;
     width: 80px;
     height: 80px;
@@ -141,7 +141,7 @@
 /* Landscape mobile */
 @media (max-width: 768px) and (orientation: landscape) {
   .joystick {
-    bottom: 40px;
+    bottom: 20px;
     left: 40px;
     width: 70px;
     height: 70px;
@@ -203,7 +203,7 @@
 
 .joystick-active {
   animation: joystickActive 1.5s infinite;
-  background: rgba(200, 255, 200, 0.4);
+  background: rgba(200, 255, 200, 0.2);
 }
 
 /* Pulse animation for instructions */
@@ -227,7 +227,7 @@
 /* Avatar action buttons */
 .avatar-actions {
   position: absolute;
-  bottom: 80px;
+  bottom: 40px;
   right: 30px;
   display: flex;
   flex-direction: column;
@@ -239,8 +239,8 @@
   width: 60px;
   height: 60px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
-  border: 3px solid rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.15);
+  border: 3px solid rgba(255, 255, 255, 0.3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -253,7 +253,7 @@
 
 .action-button:active,
 .action-button.active {
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.25);
   transform: scale(0.95);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }

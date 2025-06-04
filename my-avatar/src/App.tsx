@@ -64,26 +64,16 @@ const App: React.FC = () => {
 
     // Handle touch movement with improved responsiveness
     const handleTouchMovement = useCallback((movement: TouchMovement) => {
-        // Chỉ cập nhật khi có chuyển động thực sự
-        if (Math.abs(movement.x) > 0.0003 || Math.abs(movement.y) > 0.0003 || movement.isMoving) {
-            setTouchMovement(movement);
-            
-            // Xóa bất kỳ timeout nào đang chờ xử lý
-            if ((window as any).touchMovementTimeout) {
-                clearTimeout((window as any).touchMovementTimeout);
-            }
-        } else {
-            // Thêm debounce để tránh reset trạng thái di chuyển quá nhanh
-            // Điều này giúp chuyển động mượt mà hơn khi người dùng di chuyển chậm
-            if ((window as any).touchMovementTimeout) {
-                clearTimeout((window as any).touchMovementTimeout);
-            }
-            
-            (window as any).touchMovementTimeout = setTimeout(() => {
-                // Khi không có chuyển động trong 150ms, đặt isMoving = false
-                setTouchMovement(prev => ({ ...prev, isMoving: false }));
-                (window as any).touchMovementTimeout = null;
-            }, 150);
+        console.log("Received touch movement:", movement);
+        
+        // Luôn cập nhật touchMovement state, kể cả khi là reset (x: 0, y: 0, isMoving: false)
+        // Điều này đảm bảo BabylonScene nhận được tất cả các thay đổi trạng thái
+        setTouchMovement(movement);
+        
+        // Xóa bất kỳ timeout nào đang chờ xử lý
+        if ((window as any).touchMovementTimeout) {
+            clearTimeout((window as any).touchMovementTimeout);
+            (window as any).touchMovementTimeout = null;
         }
     }, []);
 
