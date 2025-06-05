@@ -5,9 +5,11 @@ import './AvatarControls.css';
 import BabylonScene, { ModelInfo, BabylonSceneHandle, ActiveMovement, TouchMovement, TouchRotation } from './BabylonScene';
 import AvatarControls from './AvatarControls';
 import TouchController from './TouchController';
+import SimpleCharacterDemo from './SimpleCharacterDemo';
 import { availablePartsData, getDefaultConfigForGender, AvatarConfig, Gender, AvatarPartPaths, AvatarColors } from './avatarPartsData';
 
 const App: React.FC = () => {
+    const [useSimpleController, setUseSimpleController] = useState(false);
     const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(() => getDefaultConfigForGender('male'));
     const babylonSceneRef = useRef<BabylonSceneHandle>(null);
     const [activeMovement, setActiveMovement] = useState<ActiveMovement>({
@@ -64,7 +66,14 @@ const App: React.FC = () => {
 
     // Handle touch movement with improved responsiveness
     const handleTouchMovement = useCallback((movement: TouchMovement) => {
-        console.log("Received touch movement:", movement);
+        console.log("📱 App.tsx received touch movement:", {
+            movement,
+            x: movement.x,
+            y: movement.y,
+            isMoving: movement.isMoving,
+            durationBoost: movement.durationBoost,
+            timestamp: new Date().toLocaleTimeString()
+        });
         
         // Luôn cập nhật touchMovement state, kể cả khi là reset (x: 0, y: 0, isMoving: false)
         // Điều này đảm bảo BabylonScene nhận được tất cả các thay đổi trạng thái
@@ -346,6 +355,34 @@ const App: React.FC = () => {
     const handleToggleInspector = () => babylonSceneRef.current?.toggleInspector();
     const handleToggleTouchControls = () => setShowTouchControls(!showTouchControls);
 
+    // Conditional rendering based on controller type
+    if (useSimpleController) {
+        return (
+            <div className="App">
+                <SimpleCharacterDemo />
+                {/* Toggle button */}
+                <button
+                    onClick={() => setUseSimpleController(false)}
+                    style={{
+                        position: 'fixed',
+                        top: '10px',
+                        left: '10px',
+                        padding: '10px 15px',
+                        backgroundColor: '#2196F3',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '5px',
+                        cursor: 'pointer',
+                        zIndex: 2000,
+                        fontSize: '14px'
+                    }}
+                >
+                    Switch to Full Avatar System
+                </button>
+            </div>
+        );
+    }
+
     return (
         <div className="app">
             <div className="main-content">
@@ -390,10 +427,25 @@ const App: React.FC = () => {
                                 borderRadius: '4px',
                                 fontWeight: 'bold',
                                 cursor: 'pointer',
-                                transition: 'all 0.3s ease'
+                                transition: 'all 0.3s ease',
+                                marginRight: '10px'
                             }}
                         >
                             {showTouchControls ? 'Ẩn' : 'Hiện'} Touch Controls
+                        </button>
+                        <button 
+                            onClick={() => setUseSimpleController(true)}
+                            style={{
+                                padding: '8px 16px',
+                                backgroundColor: '#2196F3',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                transition: 'all 0.3s ease'
+                            }}
+                        >
+                            Try Simple Controller
                         </button>
                     </div>
                     <div className="movement-instructions" style={{ marginTop: '20px', fontSize: '0.9em', textAlign: 'left', padding: '10px', background: '#f9f9f9', borderRadius: '4px' }}>

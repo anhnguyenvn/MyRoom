@@ -61,7 +61,14 @@ const rotationMatrix = new Matrix(); // Khai báo ở ngoài để tái sử d�
 
 const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ modelsToLoad, activeMovement, touchMovement, touchRotation }, ref) => {
     // Debug: Log touchMovement prop ngay khi component nhận được
-    console.log('BabylonScene received touchMovement prop:', touchMovement);
+    console.log('🎯 BabylonScene received touchMovement prop:', {
+        touchMovement,
+        x: touchMovement?.x,
+        y: touchMovement?.y,
+        isMoving: touchMovement?.isMoving,
+        durationBoost: touchMovement?.durationBoost,
+        timestamp: new Date().toLocaleTimeString()
+    });
     
     const reactCanvas = useRef<HTMLCanvasElement>(null);
     const engineRef = useRef<Nullable<Engine>>(null);
@@ -347,9 +354,16 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                 if (activeMovement.right) { moveDirection.addInPlace(cameraRight); isMoving = true; }
                 if (activeMovement.left) { moveDirection.subtractInPlace(cameraRight); isMoving = true; }
 
-                console.log('XXX movement:', touchMovement?.x);
                 // Xử lý di chuyển từ touch với độ nhạy cao hơn và phản hồi tốt hơn
                 if (touchMovement) {
+                    console.log('🚀 Processing touchMovement in onBeforeRenderObservable:', {
+                        x: touchMovement.x,
+                        y: touchMovement.y,
+                        isMoving: touchMovement.isMoving,
+                        durationBoost: touchMovement.durationBoost,
+                        timestamp: new Date().toLocaleTimeString()
+                    });
+                    
                     // Giảm ngưỡng phát hiện chuyển động để tăng độ nhạy
                     const hasTouchMovement = Math.abs(touchMovement.x) > 0.0003 || Math.abs(touchMovement.y) > 0.0003;
                     

@@ -55,6 +55,13 @@ const TouchController: React.FC<TouchControllerProps> = ({
   const maxDistance = joystickRadius - knobRadius;
 
   const updateMovement = useCallback((currentX: number, currentY: number, centerX: number, centerY: number) => {
+    console.log('🎮 updateMovement CALLED with:', { currentX, currentY, centerX, centerY, timestamp: new Date().toLocaleTimeString() });
+    
+    if (!joystickRef.current || !containerRef.current) {
+      console.log('❌ updateMovement: Missing refs - joystick or container');
+      return;
+    }
+    
     console.log('updateMovement called with:', { currentX, currentY, centerX, centerY });
     // Tính toán vector di chuyển từ trung tâm joystick đến vị trí touch
     const deltaX = currentX - centerX;
@@ -175,7 +182,7 @@ const TouchController: React.FC<TouchControllerProps> = ({
     // Ghi lại thời gian bắt đầu touch để tính toán độ nhạy dựa trên thời gian
     touchStartTimeRef.current = Date.now();
     
-    console.log('Touch start event received', { touches: e.touches.length });
+    console.log('👆 Touch start event received', { touches: e.touches.length, timestamp: new Date().toLocaleTimeString() });
     console.log('onMovementChange function:', onMovementChange);
     
     if (e.touches.length === 0) {
@@ -306,7 +313,7 @@ const TouchController: React.FC<TouchControllerProps> = ({
   // Thêm mouse handlers
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    console.log('Mouse down on joystick detected!');
+    console.log('🖱️ Mouse down on joystick detected!', { clientX: e.clientX, clientY: e.clientY, timestamp: new Date().toLocaleTimeString() });
     
     // Lấy vị trí của joystick element
     const joystickRect = joystickRef.current?.getBoundingClientRect();
@@ -662,6 +669,7 @@ const TouchController: React.FC<TouchControllerProps> = ({
         ref={joystickRef}
         className={`joystick ${isActive ? 'active' : ''}`}
         onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
       >
         <div 
           ref={knobRef}
@@ -676,7 +684,7 @@ const TouchController: React.FC<TouchControllerProps> = ({
       <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 1000, pointerEvents: 'auto' }}>
         <button 
           onClick={() => {
-            console.log('Test button clicked - sending movement data');
+            console.log('🔴 Test button clicked - sending movement data:', { x: 0.5, y: 0.5, isMoving: true, durationBoost: 1.0 });
             onMovementChange({ x: 0.5, y: 0.5, isMoving: true, durationBoost: 1.0 });
           }}
           style={{
