@@ -98,7 +98,24 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
     const jumpStartTimeRef = useRef(0);
     const jumpHeight = 1.5;
     const jumpDuration = 1000; // milliseconds
-    const touchRotationRef = useRef(0);
+
+    // Refs to hold the latest control states
+    const activeMovementRef = useRef(activeMovement);
+    const touchMovementRef = useRef<TouchMovement | undefined>(touchMovement);
+    const touchRotationRef = useRef<TouchRotation | undefined>(touchRotation);
+
+    // Keep ref values in sync with latest props
+    useEffect(() => {
+        activeMovementRef.current = activeMovement;
+    }, [activeMovement]);
+
+    useEffect(() => {
+        touchMovementRef.current = touchMovement;
+    }, [touchMovement]);
+
+    useEffect(() => {
+        touchRotationRef.current = touchRotation;
+    }, [touchRotation]);
 
     const defaultCameraAlpha = -Math.PI / 1.5;
     const defaultCameraBeta = Math.PI / 2.5;
@@ -329,10 +346,15 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
 
             const sceneObserver = babylonScene.onBeforeRenderObservable.add(() => {
                 if (!avatarRootRef.current || !engineRef.current) return;
-                
+
+                // Get the latest control states from refs
+                const currentTouchMovement = touchMovementRef.current;
+                const currentActiveMovement = activeMovementRef.current;
+                const currentTouchRotation = touchRotationRef.current;
+
                 // Log để debug khi onBeforeRenderObservable được gọi
-                if (touchMovement && (touchMovement.isMoving || Math.abs(touchMovement.x) > 0.001 || Math.abs(touchMovement.y) > 0.001)) {
-                    console.log('onBeforeRenderObservable called with touchMovement:', touchMovement);
+                if (currentTouchMovement && (currentTouchMovement.isMoving || Math.abs(currentTouchMovement.x) > 0.001 || Math.abs(currentTouchMovement.y) > 0.001)) {
+                    console.log('onBeforeRenderObservable called with touchMovement:', currentTouchMovement);
                 }
                 
                 const deltaTime = engineRef.current.getDeltaTime() / 1000.0;
@@ -348,24 +370,24 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                 cameraRight.normalize();
 
                 // Xử lý di chuyển từ keyboard
-                const currentSpeed = activeMovement.run ? runSpeed : movementSpeed;
-                if (activeMovement.forward) { moveDirection.addInPlace(cameraDirection); isMoving = true; }
-                if (activeMovement.backward) { moveDirection.subtractInPlace(cameraDirection); isMoving = true; }
-                if (activeMovement.right) { moveDirection.addInPlace(cameraRight); isMoving = true; }
-                if (activeMovement.left) { moveDirection.subtractInPlace(cameraRight); isMoving = true; }
+                const currentSpeed = currentActiveMovement.run ? runSpeed : movementSpeed;
+                if (currentActiveMovement.forward) { moveDirection.addInPlace(cameraDirection); isMoving = true; }
+                if (currentActiveMovement.backward) { moveDirection.subtractInPlace(cameraDirection); isMoving = true; }
+                if (currentActiveMovement.right) { moveDirection.addInPlace(cameraRight); isMoving = true; }
+                if (currentActiveMovement.left) { moveDirection.subtractInPlace(cameraRight); isMoving = true; }
 
                 // Xử lý di chuyển từ touch với độ nhạy cao hơn và phản hồi tốt hơn
-                if (touchMovement) {
+                if (currentTouchMovement) {
                     console.log('🚀 Processing touchMovement in onBeforeRenderObservable:', {
-                        x: touchMovement.x,
-                        y: touchMovement.y,
-                        isMoving: touchMovement.isMoving,
-                        durationBoost: touchMovement.durationBoost,
+                        x: currentTouchMovement.x,
+                        y: currentTouchMovement.y,
+                        isMoving: currentTouchMovement.isMoving,
+                        durationBoost: currentTouchMovement.durationBoost,
                         timestamp: new Date().toLocaleTimeString()
                     });
-                    
+
                     // Giảm ngưỡng phát hiện chuyển động để tăng độ nhạy
-                    const hasTouchMovement = Math.abs(touchMovement.x) > 0.0003 || Math.abs(touchMovement.y) > 0.0003;
+                    const hasTouchMovement = Math.abs(currentTouchMovement.x) > 0.0003 || Math.abs(currentTouchMovement.y) > 0.0003;
                     
                     // Khởi tạo metadata nếu chưa có
                     if (!avatarRootRef.current.metadata) {
@@ -377,14 +399,14 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                         };
                     }
                     
-                    if (hasTouchMovement || touchMovement.isMoving) {
+                    if (hasTouchMovement || currentTouchMovement.isMoving) {
                         // Chỉ ghi log khi có chuyển động thực sự
-                        console.log('Touch movement detected:', touchMovement);
+                        console.log('Touch movement detected:', currentTouchMovement);
                         
                         const touchMoveDirection = Vector3.Zero();
                         
                         // Tính toán cường độ di chuyển tổng thể
-                        const moveMagnitude = Math.sqrt(touchMovement.x * touchMovement.x + touchMovement.y * touchMovement.y);
+                        const moveMagnitude = Math.sqrt(currentTouchMovement.x * currentTouchMovement.x + currentTouchMovement.y * currentTouchMovement.y);
                         
                         // Làm mượt cường độ di chuyển
                         if (!avatarRootRef.current.metadata.smoothedMagnitude) {
@@ -414,10 +436,10 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                         avatarRootRef.current.metadata.lastMoveTime = Date.now();
                         
                         // Sử dụng durationBoost từ TouchController nếu có, nếu không thì tính toán
-                        let durationBoost = touchMovement.durationBoost || 1.0;
+                        let durationBoost = currentTouchMovement.durationBoost || 1.0;
                         
                         // Nếu không có durationBoost từ TouchController, tính toán dựa trên thời gian
-                        if (!touchMovement.durationBoost) {
+                        if (!currentTouchMovement.durationBoost) {
                             // Tính toán thời gian đã giữ
                             const touchDuration = Date.now() - avatarRootRef.current.metadata.touchStartTime;
                             // Tăng hệ số dựa trên thời gian giữ (tối đa 60% sau 2 giây)
@@ -425,12 +447,12 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                         }
                         
                         // Tính toán hệ số tăng tốc dựa trên cường độ di chuyển
-                        const forwardBoost = Math.abs(touchMovement.y) > boostThreshold ? boostMultiplier : 1.0;
-                        const sideBoost = Math.abs(touchMovement.x) > boostThreshold ? boostMultiplier : 1.0;
+                        const forwardBoost = Math.abs(currentTouchMovement.y) > boostThreshold ? boostMultiplier : 1.0;
+                        const sideBoost = Math.abs(currentTouchMovement.x) > boostThreshold ? boostMultiplier : 1.0;
                         
                         // Áp dụng hệ số di chuyển và tăng tốc với hệ số thời gian
-                        const finalForwardMovement = -touchMovement.y * movementMultiplier * forwardBoost * durationBoost;
-                        const finalSideMovement = touchMovement.x * movementMultiplier * sideBoost * durationBoost;
+                        const finalForwardMovement = -currentTouchMovement.y * movementMultiplier * forwardBoost * durationBoost;
+                        const finalSideMovement = currentTouchMovement.x * movementMultiplier * sideBoost * durationBoost;
                         
                         // Cập nhật debug info cho BabylonScene processing
                         setDebugBabylonProcessing({
@@ -451,10 +473,10 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                             forwardBoost: forwardBoost,
                             sideBoost: sideBoost,
                             durationBoost: durationBoost,
-                            durationBoostSource: touchMovement.durationBoost ? 'TouchController' : 'BabylonScene',
+                            durationBoostSource: currentTouchMovement.durationBoost ? 'TouchController' : 'BabylonScene',
                             magnitude: moveMagnitude,
                             smoothedMagnitude: smoothedMagnitude,
-                            touchDuration: touchMovement.durationBoost ? 'Using TouchController value' : 
+                            touchDuration: currentTouchMovement.durationBoost ? 'Using TouchController value' :
                                 (Date.now() - avatarRootRef.current.metadata.touchStartTime) + 'ms'
                         });
                         
@@ -467,9 +489,9 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                         
                         // Xác định nếu nên chạy dựa trên cường độ di chuyển và thời gian
                         // Giảm ngưỡng durationBoost để dễ dàng kích hoạt chạy hơn
-                        if (smoothedMagnitude > 0.7 && durationBoost > 1.3 && !activeMovement.run) {
+                        if (smoothedMagnitude > 0.7 && durationBoost > 1.3 && !currentActiveMovement.run) {
                             // Tự động chuyển sang chạy khi di chuyển nhanh và đủ lâu
-                            activeMovement.run = true;
+                            currentActiveMovement.run = true;
                         }
                     } else {
                         // Reset debug info khi không có chuyển động
@@ -500,7 +522,7 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                             avatarRootRef.current.metadata.smoothedMagnitude = 0;
                             
                             // Đảm bảo tắt chế độ chạy khi dừng lâu
-                            activeMovement.run = false;
+                            currentActiveMovement.run = false;
                         }
                     }
                 }
@@ -560,12 +582,12 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
 
                 // Xử lý xoay từ keyboard
                 let rotationAmount = 0;
-                if (activeMovement.turnLeft) { rotationAmount = -rotationSpeed * deltaTime; }
-                if (activeMovement.turnRight) { rotationAmount = rotationSpeed * deltaTime; }
+                if (currentActiveMovement.turnLeft) { rotationAmount = -rotationSpeed * deltaTime; }
+                if (currentActiveMovement.turnRight) { rotationAmount = rotationSpeed * deltaTime; }
                 
                 // Xử lý xoay từ touch
-                if (touchRotation && Math.abs(touchRotation.delta) > 0.001) {
-                    rotationAmount += touchRotation.delta;
+                if (currentTouchRotation && Math.abs(currentTouchRotation.delta) > 0.001) {
+                    rotationAmount += currentTouchRotation.delta;
                 }
                 
                 if (rotationAmount !== 0) {
@@ -573,7 +595,7 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                 }
 
                 // Xử lý nhảy
-                if (activeMovement.jump && !isJumpingRef.current) {
+                if (currentActiveMovement.jump && !isJumpingRef.current) {
                     isJumpingRef.current = true;
                     jumpStartTimeRef.current = Date.now();
                     if (jumpAnimRef.current) {
@@ -596,16 +618,16 @@ const BabylonScene = forwardRef<BabylonSceneHandle, BabylonSceneProps>(({ models
                 }
 
                 // Xử lý animation
-                if (activeMovement.wave && waveAnimRef.current) {
+                if (currentActiveMovement.wave && waveAnimRef.current) {
                     currentAnimRef.current?.stop();
                     waveAnimRef.current.play(true);
                     currentAnimRef.current = waveAnimRef.current;
-                } else if (activeMovement.dance && danceAnimRef.current) {
+                } else if (currentActiveMovement.dance && danceAnimRef.current) {
                     currentAnimRef.current?.stop();
                     danceAnimRef.current.play(true);
                     currentAnimRef.current = danceAnimRef.current;
                 } else if (isMoving) {
-                    if (activeMovement.run && runAnimRef.current) {
+                    if (currentActiveMovement.run && runAnimRef.current) {
                         if (currentAnimRef.current !== runAnimRef.current) {
                             currentAnimRef.current?.stop();
                             runAnimRef.current.play(true);
